@@ -4,12 +4,15 @@ import {
   insertRestaurantSchema,
   insertDealSchema,
   insertFavoriteSchema,
-  updateRestaurantSchema,
-  updateDealSchema,
+  publicInsertRestaurantSchema,
+  publicUpdateRestaurantSchema,
+  publicUpdateDealSchema,
   updateUserProfileSchema,
+  publicRestaurantSchema,
   type User,
   type Restaurant,
   type Deal,
+  type PublicRestaurant,
 } from "@shared/schema";
 import { storage } from "./storage";
 
@@ -68,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "User already has a restaurant" });
       }
 
-      const restaurantData = insertRestaurantSchema.parse(req.body);
+      const restaurantData = publicInsertRestaurantSchema.parse(req.body);
       const restaurant = await storage.createRestaurant({
         ...restaurantData,
         ownerId: req.user.id,
@@ -105,7 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Restaurant not found" });
       }
 
-      const updates = updateRestaurantSchema.parse(req.body);
+      const updates = publicUpdateRestaurantSchema.parse(req.body);
       const updatedRestaurant = await storage.updateRestaurant(restaurant.id, updates);
       res.json(updatedRestaurant);
     } catch (error) {
@@ -119,7 +122,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!restaurant) {
         return res.status(404).json({ error: "Restaurant not found" });
       }
-      res.json(restaurant);
+      // Return public view without sensitive fields
+      const publicRestaurant = publicRestaurantSchema.parse(restaurant);
+      res.json(publicRestaurant);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch restaurant" });
     }
@@ -145,7 +150,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         restaurants = await storage.searchRestaurants("", []);
       }
       
-      res.json(restaurants);
+      // Return public view without sensitive fields
+      const publicRestaurants = restaurants.map(r => publicRestaurantSchema.parse(r));
+      res.json(publicRestaurants);
     } catch (error) {
       res.status(500).json({ error: "Failed to search restaurants" });
     }
@@ -211,7 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Deal not found" });
       }
 
-      const updates = updateDealSchema.parse(req.body);
+      const updates = publicUpdateDealSchema.parse(req.body);
       const updatedDeal = await storage.updateDeal(deal.id, updates);
       res.json(updatedDeal);
     } catch (error) {
@@ -309,12 +316,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Already favorited" });
       }
 
-      const favorite = await storage.addFavorite({
-        ...favoriteData,
-        userId: req.user.id,
-      });
-      
-      res.status(201).json(favorite);
+      try {
+        const favorite = await storage.addFavorite({
+          ...favoriteData,
+          userId: req.user.id,
+        });
+        res.status(201).json(favorite);
+      } catch (error: any) {
+        if (error.message === 'DUPLICATE_FAVORITE') {
+          return res.status(409).json({ error: "Already favorited" });
+        }
+        throw error;
+      }
     } catch (error) {
       res.status(400).json({ error: "Failed to add favorite" });
     }

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -104,8 +105,9 @@ export const favorites = pgTable("favorites", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_favorites_user_id").on(table.userId),
-  index("idx_favorites_user_restaurant").on(table.userId, table.restaurantId),
-  index("idx_favorites_user_deal").on(table.userId, table.dealId),
+  // Unique constraints to prevent duplicate favorites
+  uniqueIndex("unique_user_restaurant").on(table.userId, table.restaurantId).where(sql`${table.type} = 'restaurant' AND ${table.restaurantId} IS NOT NULL`),
+  uniqueIndex("unique_user_deal").on(table.userId, table.dealId).where(sql`${table.type} = 'deal' AND ${table.dealId} IS NOT NULL`),
 ]);
 
 // Analytics tracking for deals
@@ -198,23 +200,63 @@ export const insertFavoriteSchema = createInsertSchema(favorites).omit({
   }
 );
 
-// Update schemas for PATCH operations
-export const updateRestaurantSchema = insertRestaurantSchema.partial();
-export const updateDealSchema = insertDealSchema.partial();
+// Public schemas for restaurant owners (exclude server-controlled fields)
+export const publicInsertRestaurantSchema = insertRestaurantSchema.omit({
+  subscriptionPlan: true,
+  subscriptionStatus: true,
+  dealLimit: true,
+  dealsUsedThisMonth: true,
+  isVerified: true,
+  rating: true,
+  reviewCount: true,
+});
+
+export const publicUpdateRestaurantSchema = publicInsertRestaurantSchema.partial();
+
+// Public deal update schema (exclude counters and computed fields)
+export const publicUpdateDealSchema = insertDealSchema.partial().omit({
+  duration: true, // duration is only for creation
+});
+
 export const updateUserProfileSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   profileImageUrl: z.string().url().optional(),
 });
 
+// Public restaurant response (hide internal fields)
+export const publicRestaurantSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  address: z.string(),
+  city: z.string(),
+  state: z.string(),
+  zipCode: z.string(),
+  latitude: z.string().nullable(),
+  longitude: z.string().nullable(),
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  website: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  cuisineTypes: z.array(z.string()).nullable(),
+  rating: z.string(),
+  reviewCount: z.number(),
+  isVerified: z.boolean(),
+  createdAt: z.date().nullable(),
+  updatedAt: z.date().nullable(),
+});
+
 // Export types
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertRestaurant = z.infer<typeof insertRestaurantSchema>;
-export type UpdateRestaurant = z.infer<typeof updateRestaurantSchema>;
+export type PublicInsertRestaurant = z.infer<typeof publicInsertRestaurantSchema>;
+export type PublicUpdateRestaurant = z.infer<typeof publicUpdateRestaurantSchema>;
 export type Restaurant = typeof restaurants.$inferSelect;
+export type PublicRestaurant = z.infer<typeof publicRestaurantSchema>;
 export type InsertDeal = z.infer<typeof insertDealSchema>;
-export type UpdateDeal = z.infer<typeof updateDealSchema>;
+export type PublicUpdateDeal = z.infer<typeof publicUpdateDealSchema>;
 export type Deal = typeof deals.$inferSelect;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
 export type Favorite = typeof favorites.$inferSelect;

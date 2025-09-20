@@ -25,13 +25,13 @@ export interface IStorage {
   getRestaurant(id: string): Promise<Restaurant | undefined>;
   getRestaurantByOwnerId(ownerId: string): Promise<Restaurant | undefined>;
   createRestaurant(restaurant: InsertRestaurant & { ownerId: string }): Promise<Restaurant>;
-  updateRestaurant(id: string, updates: Partial<InsertRestaurant>): Promise<Restaurant>;
+  updateRestaurant(id: string, updates: Partial<Omit<InsertRestaurant, 'ownerId'>>): Promise<Restaurant>;
   getRestaurantsNearLocation(lat: number, lng: number, radiusMiles: number): Promise<Restaurant[]>;
   searchRestaurants(query: string, cuisineTypes?: string[]): Promise<Restaurant[]>;
   
   // Deal operations
   createDeal(deal: InsertDeal & { restaurantId: string }): Promise<Deal>;
-  updateDeal(id: string, updates: Partial<InsertDeal>): Promise<Deal>;
+  updateDeal(id: string, updates: Partial<Omit<InsertDeal, 'duration'>>): Promise<Deal>;
   deleteDeal(id: string): Promise<void>;
   getDeal(id: string): Promise<Deal | undefined>;
   getRestaurantDeals(restaurantId: string): Promise<Deal[]>;
@@ -96,7 +96,7 @@ export class DatabaseStorage implements IStorage {
     return newRestaurant;
   }
 
-  async updateRestaurant(id: string, updates: Partial<InsertRestaurant>): Promise<Restaurant> {
+  async updateRestaurant(id: string, updates: Partial<Omit<InsertRestaurant, 'ownerId'>>): Promise<Restaurant> {
     const [updated] = await db
       .update(restaurants)
       .set({ ...updates, updatedAt: new Date() })
@@ -159,7 +159,7 @@ export class DatabaseStorage implements IStorage {
     return newDeal;
   }
 
-  async updateDeal(id: string, updates: Partial<InsertDeal>): Promise<Deal> {
+  async updateDeal(id: string, updates: Partial<Omit<InsertDeal, 'duration'>>): Promise<Deal> {
     const [updated] = await db
       .update(deals)
       .set({ ...updates, updatedAt: new Date() })
@@ -247,11 +247,19 @@ export class DatabaseStorage implements IStorage {
 
   // Favorites operations
   async addFavorite(favorite: InsertFavorite & { userId: string }): Promise<Favorite> {
-    const [newFavorite] = await db
-      .insert(favorites)
-      .values(favorite)
-      .returning();
-    return newFavorite;
+    try {
+      const [newFavorite] = await db
+        .insert(favorites)
+        .values(favorite)
+        .returning();
+      return newFavorite;
+    } catch (error: any) {
+      // Handle unique constraint violation
+      if (error.code === '23505' || error.constraint?.includes('unique')) {
+        throw new Error('DUPLICATE_FAVORITE');
+      }
+      throw error;
+    }
   }
 
   async removeFavorite(userId: string, type: string, itemId: string): Promise<void> {
