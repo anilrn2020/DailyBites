@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { insertDealSchema, type Deal, type Restaurant, type User } from "@shared/schema";
 import { RestaurantStats } from "@/components/RestaurantStats";
 import { SubscriptionPricing } from "@/components/SubscriptionPricing";
 import { Button } from "@/components/ui/button";
@@ -9,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, 
   LogOut, 
@@ -74,29 +81,77 @@ const mockActiveDeals = [
 ];
 
 export default function RestaurantDashboard() {
-  const [newDeal, setNewDeal] = useState({
-    title: "",
-    description: "",
-    originalPrice: "",
-    dealPrice: "",
-    duration: "24",
+  const { toast } = useToast();
+
+  // Get current user and restaurant data
+  const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
+  const { data: restaurant } = useQuery<Restaurant>({ queryKey: ["/api/restaurants/my"] });
+  const { data: deals = [], isLoading: dealsLoading } = useQuery<Deal[]>({ 
+    queryKey: ["/api/deals", "restaurant"], 
+    enabled: !!restaurant?.id 
+  });
+
+  // Deal creation form
+  const dealForm = useForm({
+    resolver: zodResolver(insertDealSchema.extend({
+      originalPrice: insertDealSchema.shape.originalPrice.transform(Number),
+      dealPrice: insertDealSchema.shape.dealPrice.transform(Number),
+    })),
+    defaultValues: {
+      title: "",
+      description: "",
+      originalPrice: 0,
+      dealPrice: 0,
+      duration: 24, // 24 hours
+    },
+  });
+
+  const createDealMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/deals", "POST", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      dealForm.reset();
+      toast({ title: "Deal created successfully!" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create deal", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteDealMutation = useMutation({
+    mutationFn: (dealId: string) => apiRequest(`/api/deals/${dealId}`, "DELETE"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      toast({ title: "Deal deleted successfully!" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to delete deal", description: error.message, variant: "destructive" });
+    },
   });
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
   };
 
-  const handleCreateDeal = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Creating deal:', newDeal);
-    // Reset form
-    setNewDeal({
-      title: "",
-      description: "",
-      originalPrice: "",
-      dealPrice: "",
-      duration: "24",
-    });
+  const handleCreateDeal = (data: any) => {
+    // Check if restaurant has deals remaining
+    const dealLimit = restaurant?.dealLimit || 0;
+    if (restaurant && deals.length >= dealLimit) {
+      toast({ 
+        title: "Deal limit reached", 
+        description: `Your current plan allows ${dealLimit} deals. Upgrade to create more.`,
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    createDealMutation.mutate(data);
+  };
+
+  const handleDeleteDeal = (dealId: string) => {
+    if (window.confirm("Are you sure you want to delete this deal?")) {
+      deleteDealMutation.mutate(dealId);
+    }
   };
 
   return (
@@ -145,11 +200,21 @@ export default function RestaurantDashboard() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="font-heading text-3xl font-bold mb-2">
-            Welcome back, Mario's Italian Kitchen! 🍕
+            Welcome back, {restaurant?.name || user?.firstName || 'Restaurant Owner'}! 
           </h2>
           <p className="text-muted-foreground">
             Manage your deals and track your restaurant's performance
           </p>
+          {restaurant && (
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant="outline">
+                {restaurant.subscriptionPlan} Plan
+              </Badge>
+              <Badge variant="secondary">
+                {deals.length}/{restaurant.dealLimit || 0} deals used
+              </Badge>
+            </div>
+          )}
         </div>
 
         {/* Stats Overview */}
@@ -178,44 +243,81 @@ export default function RestaurantDashboard() {
             </div>
             
             <div className="grid gap-4">
-              {mockActiveDeals.map((deal) => (
-                <Card key={deal.id} data-testid={`card-active-deal-${deal.id}`}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-lg mb-2">{deal.title}</h4>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <DollarSign className="h-4 w-4" />
-                            ${deal.dealPrice} (was ${deal.originalPrice})
+              {dealsLoading ? (
+                <div className="text-center py-8">Loading your deals...</div>
+              ) : deals.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-6xl mb-4">🍽️</div>
+                  <h3 className="font-heading text-xl font-semibold mb-2">
+                    No deals yet
+                  </h3>
+                  <p className="text-muted-foreground mb-4">
+                    Create your first deal to start attracting customers
+                  </p>
+                  <Button onClick={() => {
+                    // Switch to create tab
+                    const createTab = document.querySelector('[data-testid="tab-create-deal"]') as HTMLButtonElement;
+                    createTab?.click();
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Deal
+                  </Button>
+                </div>
+              ) : (
+                deals.map((deal) => {
+                  const now = new Date();
+                  const endTime = new Date(deal.endTime);
+                  const timeLeft = Math.max(0, endTime.getTime() - now.getTime());
+                  const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+                  const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                  const timeRemaining = timeLeft > 0 ? `${hoursLeft}h ${minutesLeft}m` : "Expired";
+                  
+                  return (
+                    <Card key={deal.id} data-testid={`card-active-deal-${deal.id}`}>
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-lg mb-2">{deal.title}</h4>
+                            <p className="text-sm text-muted-foreground mb-2">{deal.description}</p>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <DollarSign className="h-4 w-4" />
+                                ${deal.dealPrice} (was ${deal.originalPrice})
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" />
+                                {timeRemaining} left
+                              </div>
+                              <Badge variant={deal.isActive && timeLeft > 0 ? "default" : "secondary"}>
+                                {deal.isActive && timeLeft > 0 ? "Active" : "Inactive"}
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            {deal.timeRemaining} left
+                          
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => console.log('Edit deal:', deal.id)}
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleDeleteDeal(deal.id)}
+                              disabled={deleteDealMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Eye className="h-4 w-4" />
-                            {deal.views} views
-                          </div>
-                          <Badge variant="secondary">
-                            {deal.orders} orders
-                          </Badge>
                         </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
             </div>
           </TabsContent>
           
@@ -226,88 +328,140 @@ export default function RestaurantDashboard() {
                 <p className="text-muted-foreground">
                   Create an attractive deal to bring in more customers
                 </p>
+                {restaurant && (
+                  <p className="text-sm text-muted-foreground">
+                    You have {(restaurant.dealLimit || 0) - deals.length} deals remaining on your {restaurant.subscriptionPlan} plan.
+                  </p>
+                )}
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleCreateDeal} className="space-y-6">
-                  <div>
-                    <Label htmlFor="deal-title">Deal Title</Label>
-                    <Input
-                      id="deal-title"
-                      placeholder="e.g., Margherita Pizza Special"
-                      value={newDeal.title}
-                      onChange={(e) => setNewDeal({...newDeal, title: e.target.value})}
-                      data-testid="input-deal-title"
+                <Form {...dealForm}>
+                  <form onSubmit={dealForm.handleSubmit(handleCreateDeal)} className="space-y-6">
+                    <FormField
+                      control={dealForm.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Deal Title</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g., Margherita Pizza Special"
+                              data-testid="input-deal-title"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="deal-description">Description</Label>
-                    <Textarea
-                      id="deal-description"
-                      placeholder="Describe your delicious deal..."
-                      value={newDeal.description}
-                      onChange={(e) => setNewDeal({...newDeal, description: e.target.value})}
-                      data-testid="textarea-deal-description"
+                    
+                    <FormField
+                      control={dealForm.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Describe your delicious deal..."
+                              data-testid="textarea-deal-description"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="original-price">Original Price ($)</Label>
-                      <Input
-                        id="original-price"
-                        type="number"
-                        step="0.01"
-                        placeholder="18.99"
-                        value={newDeal.originalPrice}
-                        onChange={(e) => setNewDeal({...newDeal, originalPrice: e.target.value})}
-                        data-testid="input-original-price"
+                    
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <FormField
+                        control={dealForm.control}
+                        name="originalPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Original Price ($)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="18.99"
+                                data-testid="input-original-price"
+                                {...field}
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={dealForm.control}
+                        name="dealPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Deal Price ($)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="12.99"
+                                data-testid="input-deal-price"
+                                {...field}
+                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
                     </div>
                     
-                    <div>
-                      <Label htmlFor="deal-price">Deal Price ($)</Label>
-                      <Input
-                        id="deal-price"
-                        type="number"
-                        step="0.01"
-                        placeholder="12.99"
-                        value={newDeal.dealPrice}
-                        onChange={(e) => setNewDeal({...newDeal, dealPrice: e.target.value})}
-                        data-testid="input-deal-price"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="duration">Deal Duration (hours)</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      placeholder="24"
-                      value={newDeal.duration}
-                      onChange={(e) => setNewDeal({...newDeal, duration: e.target.value})}
-                      data-testid="input-deal-duration"
+                    <FormField
+                      control={dealForm.control}
+                      name="duration"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Deal Duration (hours)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="1"
+                              max="168"
+                              placeholder="24"
+                              data-testid="input-deal-duration"
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 24)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  
-                  <div>
-                    <Label>Deal Image</Label>
-                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Upload a mouth-watering photo of your deal
-                      </p>
-                      <Button variant="outline" type="button" data-testid="button-upload-image">
-                        Choose Image
-                      </Button>
+                    
+                    <div>
+                      <Label>Deal Image (Optional)</Label>
+                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
+                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Upload a mouth-watering photo of your deal
+                        </p>
+                        <Button variant="outline" type="button" data-testid="button-upload-image">
+                          Choose Image
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <Button type="submit" className="w-full" data-testid="button-publish-deal">
-                    Publish Deal
-                  </Button>
-                </form>
+                    
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      data-testid="button-publish-deal"
+                      disabled={createDealMutation.isPending || (restaurant && deals.length >= (restaurant.dealLimit || 0))}
+                    >
+                      {createDealMutation.isPending ? "Creating..." : "Publish Deal"}
+                    </Button>
+                  </form>
+                </Form>
               </CardContent>
             </Card>
           </TabsContent>
