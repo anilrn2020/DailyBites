@@ -24,13 +24,13 @@ export interface IStorage {
   // Restaurant operations
   getRestaurant(id: string): Promise<Restaurant | undefined>;
   getRestaurantByOwnerId(ownerId: string): Promise<Restaurant | undefined>;
-  createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant>;
+  createRestaurant(restaurant: InsertRestaurant & { ownerId: string }): Promise<Restaurant>;
   updateRestaurant(id: string, updates: Partial<InsertRestaurant>): Promise<Restaurant>;
   getRestaurantsNearLocation(lat: number, lng: number, radiusMiles: number): Promise<Restaurant[]>;
   searchRestaurants(query: string, cuisineTypes?: string[]): Promise<Restaurant[]>;
   
   // Deal operations
-  createDeal(deal: InsertDeal): Promise<Deal>;
+  createDeal(deal: InsertDeal & { restaurantId: string }): Promise<Deal>;
   updateDeal(id: string, updates: Partial<InsertDeal>): Promise<Deal>;
   deleteDeal(id: string): Promise<void>;
   getDeal(id: string): Promise<Deal | undefined>;
@@ -45,7 +45,7 @@ export interface IStorage {
   incrementDealClick(dealId: string): Promise<void>;
   
   // Favorites operations
-  addFavorite(favorite: InsertFavorite): Promise<Favorite>;
+  addFavorite(favorite: InsertFavorite & { userId: string }): Promise<Favorite>;
   removeFavorite(userId: string, type: string, itemId: string): Promise<void>;
   getUserFavorites(userId: string, type?: string): Promise<Favorite[]>;
   isFavorite(userId: string, type: string, itemId: string): Promise<boolean>;
@@ -88,7 +88,7 @@ export class DatabaseStorage implements IStorage {
     return restaurant;
   }
 
-  async createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant> {
+  async createRestaurant(restaurant: InsertRestaurant & { ownerId: string }): Promise<Restaurant> {
     const [newRestaurant] = await db
       .insert(restaurants)
       .values(restaurant)
@@ -144,7 +144,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Deal operations
-  async createDeal(deal: InsertDeal): Promise<Deal> {
+  async createDeal(deal: InsertDeal & { restaurantId: string }): Promise<Deal> {
     const { duration, ...dealData } = deal;
     const endTime = new Date();
     endTime.setHours(endTime.getHours() + duration);
@@ -246,7 +246,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Favorites operations
-  async addFavorite(favorite: InsertFavorite): Promise<Favorite> {
+  async addFavorite(favorite: InsertFavorite & { userId: string }): Promise<Favorite> {
     const [newFavorite] = await db
       .insert(favorites)
       .values(favorite)

@@ -42,7 +42,7 @@ export const users = pgTable("users", {
 // Restaurant profiles
 export const restaurants = pgTable("restaurants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  ownerId: varchar("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ownerId: varchar("owner_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
   address: text("address").notNull(),
@@ -65,7 +65,10 @@ export const restaurants = pgTable("restaurants", {
   dealsUsedThisMonth: integer("deals_used_this_month").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_restaurants_city").on(table.city),
+  index("idx_restaurants_zip_code").on(table.zipCode),
+]);
 
 // Deals/specials posted by restaurants
 export const deals = pgTable("deals", {
@@ -86,7 +89,10 @@ export const deals = pgTable("deals", {
   category: varchar("category"), // e.g., "appetizer", "entree", "dessert", "combo"
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_deals_restaurant_id").on(table.restaurantId),
+  index("idx_deals_active_end_time").on(table.isActive, table.endTime),
+]);
 
 // Customer favorites for restaurants and deals
 export const favorites = pgTable("favorites", {
@@ -96,7 +102,11 @@ export const favorites = pgTable("favorites", {
   dealId: varchar("deal_id").references(() => deals.id, { onDelete: "cascade" }),
   type: varchar("type").notNull(), // "restaurant" or "deal"
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_favorites_user_id").on(table.userId),
+  index("idx_favorites_user_restaurant").on(table.userId, table.restaurantId),
+  index("idx_favorites_user_deal").on(table.userId, table.dealId),
+]);
 
 // Analytics tracking for deals
 export const dealAnalytics = pgTable("deal_analytics", {
@@ -107,7 +117,9 @@ export const dealAnalytics = pgTable("deal_analytics", {
   clicks: integer("clicks").default(0),
   conversions: integer("conversions").default(0),
   revenue: decimal("revenue", { precision: 10, scale: 2 }).default("0"),
-});
+}, (table) => [
+  index("idx_deal_analytics_deal_date").on(table.dealId, table.date),
+]);
 
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
@@ -159,11 +171,14 @@ export const dealAnalyticsRelations = relations(dealAnalytics, ({ one }) => ({
 export const upsertUserSchema = createInsertSchema(users);
 export const insertRestaurantSchema = createInsertSchema(restaurants).omit({
   id: true,
+  ownerId: true,
   createdAt: true,
   updatedAt: true,
 });
 export const insertDealSchema = createInsertSchema(deals).omit({
   id: true,
+  restaurantId: true,
+  endTime: true,
   createdAt: true,
   updatedAt: true,
   viewCount: true,
@@ -174,16 +189,34 @@ export const insertDealSchema = createInsertSchema(deals).omit({
 });
 export const insertFavoriteSchema = createInsertSchema(favorites).omit({
   id: true,
+  userId: true,
   createdAt: true,
+}).refine(
+  (data) => (data.restaurantId && !data.dealId) || (!data.restaurantId && data.dealId),
+  {
+    message: "Must provide either restaurantId or dealId, but not both",
+  }
+);
+
+// Update schemas for PATCH operations
+export const updateRestaurantSchema = insertRestaurantSchema.partial();
+export const updateDealSchema = insertDealSchema.partial();
+export const updateUserProfileSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  profileImageUrl: z.string().url().optional(),
 });
 
 // Export types
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertRestaurant = z.infer<typeof insertRestaurantSchema>;
+export type UpdateRestaurant = z.infer<typeof updateRestaurantSchema>;
 export type Restaurant = typeof restaurants.$inferSelect;
 export type InsertDeal = z.infer<typeof insertDealSchema>;
+export type UpdateDeal = z.infer<typeof updateDealSchema>;
 export type Deal = typeof deals.$inferSelect;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
 export type Favorite = typeof favorites.$inferSelect;
 export type DealAnalytic = typeof dealAnalytics.$inferSelect;
+export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
