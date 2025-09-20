@@ -1,0 +1,130 @@
+import { Clock, MapPin, Heart, Star } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+
+interface DealCardProps {
+  id: string;
+  restaurantName: string;
+  dealTitle: string;
+  originalPrice: number;
+  dealPrice: number;
+  imageUrl: string;
+  timeRemaining: string;
+  distance: string;
+  rating: number;
+  cuisineType: string;
+  isFavorite?: boolean;
+  onFavoriteToggle?: (id: string) => void;
+  onDealClick?: (id: string) => void;
+}
+
+export function DealCard({
+  id,
+  restaurantName,
+  dealTitle,
+  originalPrice,
+  dealPrice,
+  imageUrl,
+  timeRemaining,
+  distance,
+  rating,
+  cuisineType,
+  isFavorite = false,
+  onFavoriteToggle,
+  onDealClick,
+}: DealCardProps) {
+  const [favorite, setFavorite] = useState(isFavorite);
+  const savings = originalPrice - dealPrice;
+  const savingsPercent = Math.round((savings / originalPrice) * 100);
+
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorite(!favorite);
+    onFavoriteToggle?.(id);
+    console.log(`Favorite toggled for deal ${id}: ${!favorite}`);
+  };
+
+  const handleCardClick = () => {
+    onDealClick?.(id);
+    console.log(`Deal clicked: ${id}`);
+  };
+
+  return (
+    <Card 
+      className="overflow-hidden hover-elevate cursor-pointer group" 
+      onClick={handleCardClick}
+      data-testid={`card-deal-${id}`}
+    >
+      <div className="relative">
+        <img 
+          src={imageUrl} 
+          alt={dealTitle}
+          className="w-full h-48 object-cover"
+        />
+        <div className="absolute top-2 left-2">
+          <Badge variant="destructive" className="bg-primary text-primary-foreground">
+            {savingsPercent}% OFF
+          </Badge>
+        </div>
+        <div className="absolute top-2 right-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="bg-background/80 backdrop-blur-sm"
+            onClick={handleFavoriteClick}
+            data-testid={`button-favorite-${id}`}
+          >
+            <Heart className={`h-4 w-4 ${favorite ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} />
+          </Button>
+        </div>
+        <div className="absolute bottom-2 left-2">
+          <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
+            <Clock className="h-3 w-3 mr-1" />
+            {timeRemaining}
+          </Badge>
+        </div>
+      </div>
+      
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <Badge variant="outline" className="text-xs">
+            {cuisineType}
+          </Badge>
+          <div className="flex items-center gap-1">
+            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+            <span className="text-xs text-muted-foreground">{rating}</span>
+          </div>
+        </div>
+        
+        <h3 className="font-heading font-semibold text-lg mb-1 line-clamp-2" data-testid={`text-deal-title-${id}`}>
+          {dealTitle}
+        </h3>
+        
+        <p className="text-sm text-muted-foreground mb-2" data-testid={`text-restaurant-${id}`}>
+          {restaurantName}
+        </p>
+        
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-primary" data-testid={`text-deal-price-${id}`}>
+              ${dealPrice.toFixed(2)}
+            </span>
+            <span className="text-sm line-through text-muted-foreground">
+              ${originalPrice.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex items-center text-xs text-muted-foreground">
+            <MapPin className="h-3 w-3 mr-1" />
+            {distance}
+          </div>
+        </div>
+        
+        <div className="text-xs text-primary font-medium">
+          Save ${savings.toFixed(2)}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

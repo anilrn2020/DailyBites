@@ -1,0 +1,277 @@
+import { useState } from "react";
+import { DealGrid } from "@/components/DealGrid";
+import { SearchFilters } from "@/components/SearchFilters";
+import { RestaurantCard } from "@/components/RestaurantCard";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Heart, User, LogOut, Grid3X3, List, Map } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
+// todo: remove mock functionality
+const mockDeals = [
+  {
+    id: "1",
+    restaurantName: "Mario's Italian Kitchen",
+    dealTitle: "Authentic Margherita Pizza with Fresh Basil",
+    originalPrice: 18.99,
+    dealPrice: 12.99,
+    imageUrl: "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&h=300&fit=crop",
+    timeRemaining: "2h 30m",
+    distance: "0.5 mi",
+    rating: 4.8,
+    cuisineType: "Italian",
+    isFavorite: false,
+  },
+  {
+    id: "2",
+    restaurantName: "Sakura Sushi",
+    dealTitle: "Premium Sashimi Platter for Two",
+    originalPrice: 45.00,
+    dealPrice: 29.99,
+    imageUrl: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=400&h=300&fit=crop",
+    timeRemaining: "1h 15m",
+    distance: "0.8 mi",
+    rating: 4.9,
+    cuisineType: "Japanese",
+    isFavorite: true,
+  },
+  {
+    id: "3",
+    restaurantName: "Taco Libre",
+    dealTitle: "Street Taco Trio with Guacamole",
+    originalPrice: 14.50,
+    dealPrice: 9.99,
+    imageUrl: "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=300&fit=crop",
+    timeRemaining: "3h 45m",
+    distance: "1.2 mi",
+    rating: 4.5,
+    cuisineType: "Mexican",
+    isFavorite: false,
+  },
+];
+
+const mockRestaurants = [
+  {
+    id: "rest-1",
+    name: "Bella Vista Restaurant",
+    imageUrl: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop",
+    rating: 4.6,
+    reviewCount: 234,
+    cuisineTypes: ["Italian", "Mediterranean"],
+    distance: "1.2 mi",
+    estimatedDelivery: "25-40 min",
+    activeDealCount: 3,
+    isFavorite: true,
+  },
+  {
+    id: "rest-2",
+    name: "Golden Dragon",
+    imageUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&h=300&fit=crop",
+    rating: 4.8,
+    reviewCount: 156,
+    cuisineTypes: ["Chinese", "Asian"],
+    distance: "0.9 mi",
+    estimatedDelivery: "20-35 min",
+    activeDealCount: 2,
+    isFavorite: false,
+  },
+];
+
+export default function Home() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const [location, setLocation] = useState("San Francisco, CA");
+  const [sortBy, setSortBy] = useState("distance");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
+
+  const handleCuisineToggle = (cuisine: string) => {
+    setSelectedCuisines(prev => 
+      prev.includes(cuisine) 
+        ? prev.filter(c => c !== cuisine)
+        : [...prev, cuisine]
+    );
+  };
+
+  const handleLogout = () => {
+    window.location.href = "/api/logout";
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-background/95 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h1 className="font-heading text-2xl font-bold text-primary">Today's Special</h1>
+            <Badge variant="outline" className="hidden sm:inline-flex">
+              Customer
+            </Badge>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {/* View Mode Toggle */}
+            <div className="hidden md:flex items-center gap-1 bg-muted rounded-md p-1">
+              <Button
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                data-testid="button-view-grid"
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+                data-testid="button-view-list"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "map" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("map")}
+                data-testid="button-view-map"
+              >
+                <Map className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <ThemeToggle />
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="button-user-menu">
+                  <User className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => console.log('Profile clicked')}>
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => console.log('Favorites clicked')}>
+                  <Heart className="h-4 w-4 mr-2" />
+                  Favorites
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-6">
+        {/* Welcome Section */}
+        <div className="mb-8">
+          <h2 className="font-heading text-3xl font-bold mb-2">
+            Welcome back! 👋
+          </h2>
+          <p className="text-muted-foreground">
+            Discover today's hottest deals from restaurants near you
+          </p>
+        </div>
+
+        {/* Search Filters */}
+        <div className="mb-8">
+          <SearchFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            selectedCuisines={selectedCuisines}
+            onCuisineToggle={handleCuisineToggle}
+            location={location}
+            onLocationChange={setLocation}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+          />
+        </div>
+
+        {/* Content Tabs */}
+        <Tabs defaultValue="deals" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="deals" data-testid="tab-deals">Deals</TabsTrigger>
+            <TabsTrigger value="restaurants" data-testid="tab-restaurants">Restaurants</TabsTrigger>
+            <TabsTrigger value="favorites" data-testid="tab-favorites">Favorites</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="deals" className="mt-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-heading text-xl font-semibold">
+                Available Deals
+              </h3>
+              <Badge variant="outline">
+                {mockDeals.length} deals found
+              </Badge>
+            </div>
+            
+            {viewMode === "map" ? (
+              <div className="bg-muted/30 rounded-lg p-12 text-center">
+                <Map className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h4 className="font-semibold mb-2">Map View</h4>
+                <p className="text-muted-foreground">
+                  Interactive map showing deals would be displayed here
+                </p>
+              </div>
+            ) : (
+              <DealGrid 
+                deals={mockDeals}
+                onFavoriteToggle={(dealId) => console.log('Favorite toggled:', dealId)}
+                onDealClick={(dealId) => console.log('Deal clicked:', dealId)}
+              />
+            )}
+          </TabsContent>
+          
+          <TabsContent value="restaurants" className="mt-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-heading text-xl font-semibold">
+                Nearby Restaurants
+              </h3>
+              <Badge variant="outline">
+                {mockRestaurants.length} restaurants found
+              </Badge>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {mockRestaurants.map((restaurant) => (
+                <RestaurantCard
+                  key={restaurant.id}
+                  {...restaurant}
+                  onFavoriteToggle={(id) => console.log('Restaurant favorite toggled:', id)}
+                  onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
+                />
+              ))}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="favorites" className="mt-6">
+            <div className="text-center py-12">
+              <Heart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="font-heading text-xl font-semibold mb-2">
+                Your Favorite Deals & Restaurants
+              </h3>
+              <p className="text-muted-foreground mb-6">
+                Save deals and restaurants you love to quickly find them later
+              </p>
+              <Button variant="outline">
+                Browse Deals to Add Favorites
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}
