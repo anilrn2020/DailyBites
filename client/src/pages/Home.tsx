@@ -122,7 +122,7 @@ const formatTimeRemaining = (endTime: Date): string => {
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
-  const [location, setLocation] = useState("75035"); // Default to Frisco, TX zip code
+  const [location, setLocation] = useState(""); // Start with no location filter to show all deals
   const [sortBy, setSortBy] = useState("distance");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
 
@@ -151,6 +151,12 @@ export default function Home() {
   // Fetch deals using useQuery
   const { data: dealsData = [], isLoading: dealsLoading, error: dealsError } = useQuery<Deal[]>({
     queryKey: [buildDealsQuery()],
+    enabled: true,
+  });
+
+  // Fetch restaurants using useQuery
+  const { data: restaurantsData = [], isLoading: restaurantsLoading, error: restaurantsError } = useQuery<any[]>({
+    queryKey: ["/api/restaurants"],
     enabled: true,
   });
 
@@ -314,15 +320,32 @@ export default function Home() {
                 Nearby Restaurants
               </h3>
               <Badge variant="outline">
-                {mockRestaurants.length} restaurants found
+                {restaurantsLoading ? "Loading..." : `${restaurantsData.length} restaurants found`}
               </Badge>
             </div>
             
+            {restaurantsError && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+                <p className="text-destructive">
+                  Failed to load restaurants. Please try again later.
+                </p>
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {mockRestaurants.map((restaurant) => (
+              {restaurantsData.map((restaurant) => (
                 <RestaurantCard
                   key={restaurant.id}
-                  {...restaurant}
+                  id={restaurant.id}
+                  name={restaurant.name}
+                  imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
+                  rating={parseFloat(restaurant.rating) || 4.5}
+                  reviewCount={restaurant.reviewCount || 0}
+                  cuisineTypes={restaurant.cuisineTypes || []}
+                  distance="N/A" // We'll calculate this later with geolocation
+                  estimatedDelivery="25-40 min" // Placeholder
+                  activeDealCount={0} // We'll calculate this later
+                  isFavorite={false} // We'll implement favorites later
                   onFavoriteToggle={(id) => console.log('Restaurant favorite toggled:', id)}
                   onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
                 />
