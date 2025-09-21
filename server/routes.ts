@@ -44,6 +44,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
+  // Authentication endpoint for frontend
+  app.get("/api/auth/user", async (req: any, res: any) => {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    res.json(user);
+  });
+
   // User profile endpoints
   app.get("/api/profile", requireAuth, async (req: any, res: any) => {
     res.json(req.user);
