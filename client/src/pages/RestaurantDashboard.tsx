@@ -115,7 +115,7 @@ export default function RestaurantDashboard() {
   });
 
   const createDealMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/deals", "POST", data),
+    mutationFn: (data: any) => apiRequest("POST", "/api/deals", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/deals/my"] });
       dealForm.reset();
@@ -127,7 +127,7 @@ export default function RestaurantDashboard() {
   });
 
   const deleteDealMutation = useMutation({
-    mutationFn: (dealId: string) => apiRequest(`/api/deals/${dealId}`, "DELETE"),
+    mutationFn: (dealId: string) => apiRequest("DELETE", `/api/deals/${dealId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/deals/my"] });
       toast({ title: "Deal deleted successfully!" });
