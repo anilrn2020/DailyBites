@@ -521,7 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/restaurants", async (req: any, res: any) => {
     try {
-      const { q, cuisineTypes, lat, lng, radius } = req.query;
+      const { q, cuisineTypes, lat, lng, radius = 10, location, limit = 50, offset = 0 } = req.query;
       
       let restaurants: Restaurant[];
       
@@ -531,11 +531,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           parseFloat(lng as string),
           parseFloat(radius as string)
         );
-      } else if (q) {
-        const cuisines = cuisineTypes ? (cuisineTypes as string).split(',') : undefined;
-        restaurants = await storage.searchRestaurants(q as string, cuisines);
+      } else if (location || q) {
+        const filters: any = {};
+        if (cuisineTypes) filters.cuisineTypes = (cuisineTypes as string).split(',');
+        
+        // Handle location-based search
+        if (location) {
+          const coordinates = parseLocation(location as string);
+          if (coordinates) {
+            restaurants = await storage.getRestaurantsNearLocation(
+              coordinates.lat,
+              coordinates.lng,
+              parseFloat(radius as string)
+            );
+          } else {
+            // Invalid location provided
+            return res.status(400).json({ 
+              error: "Invalid location", 
+              details: `Location "${location}" not recognized. Please try a valid US zip code (e.g., 75035) or city, state (e.g., Dallas, TX)` 
+            });
+          }
+        } else {
+          // Search by query only
+          const cuisines = cuisineTypes ? (cuisineTypes as string).split(',') : undefined;
+          restaurants = await storage.searchRestaurants(q as string, cuisines);
+        }
       } else {
-        // Default: return some restaurants (in production, you'd want pagination)
+        // Default: return all restaurants
         restaurants = await storage.searchRestaurants("", []);
       }
       
@@ -543,6 +565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const publicRestaurants = restaurants.map(r => publicRestaurantSchema.parse(r));
       res.json(publicRestaurants);
     } catch (error) {
+      console.error("Restaurants API error:", error);
       res.status(500).json({ error: "Failed to search restaurants" });
     }
   });

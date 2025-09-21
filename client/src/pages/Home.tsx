@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { DealGrid } from "@/components/DealGrid";
 import { SearchFilters } from "@/components/SearchFilters";
 import { RestaurantCard } from "@/components/RestaurantCard";
@@ -16,6 +16,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import type { Deal } from "@shared/schema";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 
 // Transform deal data from backend to frontend format
@@ -56,6 +58,7 @@ export default function Home() {
   const [location, setLocation] = useState(""); // Start with no location filter to show all deals
   const [sortBy, setSortBy] = useState("distance");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
+  const { toast } = useToast();
 
   // Build query URL with parameters
   const buildDealsQuery = () => {
@@ -79,26 +82,102 @@ export default function Home() {
     return `/api/deals${params.toString() ? '?' + params.toString() : ''}`;
   };
 
-  // Fetch deals using useQuery with structured cache keys
+  // Fetch deals using useQuery
   const { data: dealsData = [], isLoading: dealsLoading, error: dealsError } = useQuery<Deal[]>({
-    queryKey: ["/api/deals", { 
-      q: searchQuery.trim() || undefined, 
-      location: location.trim() || undefined, 
-      radius: location.trim() ? "10" : undefined,
-      cuisineTypes: selectedCuisines.length > 0 ? selectedCuisines.join(',') : undefined,
-      limit: "50"
-    }],
+    queryKey: [buildDealsQuery()],
     enabled: true,
   });
+
+  // Build restaurants query URL with parameters
+  const buildRestaurantsQuery = () => {
+    const params = new URLSearchParams();
+    
+    if (searchQuery.trim()) {
+      params.append('q', searchQuery);
+    }
+    
+    if (location.trim()) {
+      params.append('location', location);
+      params.append('radius', '10'); // Default 10 mile radius
+    }
+    
+    if (selectedCuisines.length > 0) {
+      params.append('cuisineTypes', selectedCuisines.join(','));
+    }
+    
+    params.append('limit', '50');
+    
+    return `/api/restaurants${params.toString() ? '?' + params.toString() : ''}`;
+  };
 
   // Fetch restaurants using useQuery
   const { data: restaurantsData = [], isLoading: restaurantsLoading, error: restaurantsError } = useQuery<any[]>({
-    queryKey: ["/api/restaurants"],
+    queryKey: [buildRestaurantsQuery()],
     enabled: true,
   });
 
-  // Transform deals for display
-  const deals = dealsData.map(transformDeal);
+  // Fetch user favorites
+  const { data: favoritesData = [], isLoading: favoritesLoading, error: favoritesError } = useQuery<any[]>({
+    queryKey: ["/api/favorites"],
+    enabled: true,
+  });
+
+  // Create favorites state for quick lookup
+  const favoriteRestaurants = new Set(favoritesData.filter(fav => fav.type === 'restaurant').map(fav => fav.restaurantId));
+  const favoriteDeals = new Set(favoritesData.filter(fav => fav.type === 'deal').map(fav => fav.dealId));
+
+  // Add favorite mutation
+  const addFavoriteMutation = useMutation({
+    mutationFn: (data: { type: string, restaurantId?: string, dealId?: string }) => 
+      apiRequest("POST", "/api/favorites", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/favorites"] });
+      toast({
+        title: "Added to favorites",
+        description: "Item added to your favorites successfully",
+      });
+    },
+    onError: (error: any) => {
+      let message = "Failed to add to favorites";
+      try {
+        const errorData = JSON.parse(error.message);
+        if (errorData.error) {
+          message = errorData.error;
+        }
+      } catch {}
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Remove favorite mutation
+  const removeFavoriteMutation = useMutation({
+    mutationFn: (data: { type: string, id: string }) => 
+      apiRequest("DELETE", `/api/favorites/${data.type}/${data.id}`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/favorites"] });
+      toast({
+        title: "Removed from favorites",
+        description: "Item removed from your favorites successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: "Failed to remove from favorites",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Transform deals for display with favorite status
+  const deals = dealsData.map(deal => ({
+    ...transformDeal(deal),
+    isFavorite: favoriteDeals.has(deal.id),
+  }));
 
   const handleCuisineToggle = (cuisine: string) => {
     setSelectedCuisines(prev => 
@@ -106,6 +185,22 @@ export default function Home() {
         ? prev.filter(c => c !== cuisine)
         : [...prev, cuisine]
     );
+  };
+
+  const handleDealFavoriteToggle = (dealId: string) => {
+    if (favoriteDeals.has(dealId)) {
+      removeFavoriteMutation.mutate({ type: 'deal', id: dealId });
+    } else {
+      addFavoriteMutation.mutate({ type: 'deal', dealId });
+    }
+  };
+
+  const handleRestaurantFavoriteToggle = (restaurantId: string) => {
+    if (favoriteRestaurants.has(restaurantId)) {
+      removeFavoriteMutation.mutate({ type: 'restaurant', id: restaurantId });
+    } else {
+      addFavoriteMutation.mutate({ type: 'restaurant', restaurantId });
+    }
   };
 
   const handleLogout = () => {
@@ -255,7 +350,7 @@ export default function Home() {
               <DealGrid 
                 deals={deals}
                 loading={dealsLoading}
-                onFavoriteToggle={(dealId) => console.log('Favorite toggled:', dealId)}
+                onFavoriteToggle={handleDealFavoriteToggle}
                 onDealClick={(dealId) => console.log('Deal clicked:', dealId)}
               />
             )}
@@ -303,8 +398,8 @@ export default function Home() {
                     distance="N/A" // We'll calculate this later with geolocation
                     estimatedDelivery="25-40 min" // Placeholder
                     activeDealCount={0} // We'll calculate this later
-                    isFavorite={false} // We'll implement favorites later
-                    onFavoriteToggle={(id) => console.log('Restaurant favorite toggled:', id)}
+                    isFavorite={favoriteRestaurants.has(restaurant.id)}
+                    onFavoriteToggle={handleRestaurantFavoriteToggle}
                     onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
                   />
                 ))}
@@ -313,18 +408,84 @@ export default function Home() {
           </TabsContent>
           
           <TabsContent value="favorites" className="mt-6">
-            <div className="text-center py-12">
-              <Heart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="font-heading text-xl font-semibold mb-2">
-                Your Favorite Deals & Restaurants
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-heading text-xl font-semibold">
+                Your Favorites
               </h3>
-              <p className="text-muted-foreground mb-6">
-                Save deals and restaurants you love to quickly find them later
-              </p>
-              <Button variant="outline">
-                Browse Deals to Add Favorites
-              </Button>
+              <Badge variant="outline">
+                {favoritesLoading ? "Loading..." : `${favoritesData.length} favorites`}
+              </Badge>
             </div>
+            
+            {favoritesError && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+                <p className="text-destructive">
+                  Failed to load favorites. Please try again later.
+                </p>
+              </div>
+            )}
+
+            {favoritesData.length === 0 && !favoritesLoading ? (
+              <div className="text-center py-12">
+                <Heart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="font-heading text-xl font-semibold mb-2">
+                  No Favorites Yet
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Save deals and restaurants you love to quickly find them later
+                </p>
+                <Button variant="outline">
+                  Browse Deals to Add Favorites
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Favorite Deals */}
+                {favoritesData.filter(fav => fav.type === 'deal').length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Favorite Deals ({favoritesData.filter(fav => fav.type === 'deal').length})
+                    </h4>
+                    <DealGrid
+                      deals={deals.filter(deal => favoriteDeals.has(deal.id))}
+                      loading={false}
+                      onFavoriteToggle={handleDealFavoriteToggle}
+                      onDealClick={(dealId) => console.log('Deal clicked:', dealId)}
+                    />
+                  </div>
+                )}
+                
+                {/* Favorite Restaurants */}
+                {favoritesData.filter(fav => fav.type === 'restaurant').length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Favorite Restaurants ({favoritesData.filter(fav => fav.type === 'restaurant').length})
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {restaurantsData.filter(restaurant => favoriteRestaurants.has(restaurant.id)).map((restaurant) => (
+                        <RestaurantCard
+                          key={restaurant.id}
+                          id={restaurant.id}
+                          name={restaurant.name}
+                          imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
+                          rating={parseFloat(restaurant.rating) || 4.5}
+                          reviewCount={restaurant.reviewCount || 0}
+                          cuisineTypes={restaurant.cuisineTypes || []}
+                          distance="N/A"
+                          estimatedDelivery="25-40 min"
+                          activeDealCount={0}
+                          isFavorite={true}
+                          onFavoriteToggle={handleRestaurantFavoriteToggle}
+                          onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </main>
