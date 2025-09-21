@@ -59,6 +59,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userType: "restaurant",
       });
       
+      // Check if restaurant already exists, if not create one
+      let restaurant = await storage.getRestaurantByOwnerId(testUserId);
+      if (!restaurant) {
+        restaurant = await storage.createRestaurant({
+          name: "Test Restaurant",
+          description: "A test restaurant for development",
+          address: "123 Main St",
+          city: "Test City",
+          state: "TC",
+          zipCode: "12345",
+          phone: "(555) 123-4567",
+          email: "restaurant@test.com",
+          cuisineTypes: ["American"],
+          ownerId: testUserId,
+        });
+      }
+      
       // Set session
       req.session.userId = testUserId;
       
