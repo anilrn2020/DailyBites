@@ -84,6 +84,7 @@ const formatTimeRemaining = (endTime: Date): string => {
 export default function Home() {
   const { user } = useAuth() as { user: User | null; isLoading: boolean; isAuthenticated: boolean };
   const [location, setLocation] = useState(""); // Will be set to user's city
+  const [viewMode, setViewMode] = useState("grid"); // View mode for deals display
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const { toast } = useToast();
 
