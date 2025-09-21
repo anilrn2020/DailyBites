@@ -18,6 +18,7 @@ import {
   type CustomerSignup,
 } from "@shared/schema";
 import { storage } from "./storage";
+import { parseLocation } from "./geocoding";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to get authenticated user
@@ -478,16 +479,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/deals", async (req: any, res: any) => {
     try {
-      const { q, maxPrice, cuisineTypes, limit = 50, offset = 0 } = req.query;
+      const { q, maxPrice, cuisineTypes, location, radius = 10, limit = 50, offset = 0 } = req.query;
       
       let deals: Deal[];
       
-      if (q) {
+      if (q || location) {
         const filters: any = {};
         if (maxPrice) filters.maxPrice = parseFloat(maxPrice as string);
         if (cuisineTypes) filters.cuisineTypes = (cuisineTypes as string).split(',');
         
-        deals = await storage.searchDeals(q as string, filters);
+        // Handle location-based search
+        if (location) {
+          const coordinates = parseLocation(location as string);
+          if (coordinates) {
+            filters.location = {
+              lat: coordinates.lat,
+              lng: coordinates.lng,
+              radius: parseFloat(radius as string)
+            };
+          } else {
+            // Invalid location provided
+            return res.status(400).json({ 
+              error: "Invalid location", 
+              details: `Location "${location}" not recognized. Please try a valid US zip code (e.g., 75035) or city, state (e.g., Dallas, TX)` 
+            });
+          }
+        }
+        
+        deals = await storage.searchDeals(q as string || "", filters);
       } else {
         deals = await storage.getActiveDeals(
           parseInt(limit as string),
@@ -497,6 +516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(deals);
     } catch (error) {
+      console.error("Deals API error:", error);
       res.status(500).json({ error: "Failed to fetch deals" });
     }
   });

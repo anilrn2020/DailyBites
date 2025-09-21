@@ -15,6 +15,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, or, ilike } from "drizzle-orm";
+import { calculateDistance } from "./geocoding";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -204,7 +205,41 @@ export class DatabaseStorage implements IStorage {
     cuisineTypes?: string[];
     maxPrice?: number;
     location?: { lat: number; lng: number; radius: number };
-  }): Promise<Deal[]> {
+  }): Promise<any[]> {
+    let whereConditions = [
+      eq(deals.isActive, true),
+      gte(deals.endTime, new Date())
+    ];
+
+    // Add text search conditions if query is provided
+    if (query && query.trim()) {
+      const searchCondition = or(
+        ilike(deals.title, `%${query}%`),
+        ilike(deals.description, `%${query}%`),
+        ilike(restaurants.name, `%${query}%`)
+      );
+      if (searchCondition) {
+        whereConditions.push(searchCondition);
+      }
+    }
+
+    // Add price filter
+    if (filters?.maxPrice) {
+      whereConditions.push(sql`${deals.dealPrice} <= ${filters.maxPrice}`);
+    }
+
+    // Add cuisine type filter
+    if (filters?.cuisineTypes && filters.cuisineTypes.length > 0) {
+      // For cuisine types, we need to check if any of the restaurant's cuisine types match
+      const cuisineConditions = filters.cuisineTypes.map(cuisine => 
+        sql`${restaurants.cuisineTypes} @> ARRAY[${cuisine}]::text[]`
+      );
+      const cuisineCondition = or(...cuisineConditions);
+      if (cuisineCondition) {
+        whereConditions.push(cuisineCondition);
+      }
+    }
+
     let queryBuilder = db
       .select({
         deal: deals,
@@ -212,23 +247,48 @@ export class DatabaseStorage implements IStorage {
       })
       .from(deals)
       .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
-      .where(
-        and(
-          eq(deals.isActive, true),
-          gte(deals.endTime, new Date()),
-          or(
-            ilike(deals.title, `%${query}%`),
-            ilike(deals.description, `%${query}%`),
-            ilike(restaurants.name, `%${query}%`)
-          )
-        )
-      );
-
-    // Add filters if provided (note: this is a simplified implementation)
-    // In production, you'd want to properly handle additional where conditions
+      .where(and(...whereConditions));
 
     const results = await queryBuilder.orderBy(asc(deals.endTime));
-    return results.map(r => r.deal);
+    
+    // Apply location filtering and enrich with distance if provided
+    if (filters?.location) {
+      const { lat, lng, radius } = filters.location;
+      return results
+        .map(r => {
+          let distance = null;
+          if (r.restaurant.latitude && r.restaurant.longitude) {
+            distance = calculateDistance(
+              lat, 
+              lng, 
+              parseFloat(r.restaurant.latitude), 
+              parseFloat(r.restaurant.longitude)
+            );
+          }
+          return {
+            ...r.deal,
+            restaurantName: r.restaurant.name,
+            restaurantAddress: r.restaurant.address,
+            restaurantCity: r.restaurant.city,
+            restaurantState: r.restaurant.state,
+            cuisineTypes: r.restaurant.cuisineTypes || [],
+            distance: distance
+          };
+        })
+        .filter(enrichedDeal => enrichedDeal.distance !== null && enrichedDeal.distance <= radius)
+        .sort((a, b) => (a.distance || 0) - (b.distance || 0)); // Sort by distance
+    }
+
+    // Return enriched deals without distance filtering
+    return results.map(r => ({
+      ...r.deal,
+      restaurantName: r.restaurant.name,
+      restaurantAddress: r.restaurant.address,
+      restaurantCity: r.restaurant.city,
+      restaurantState: r.restaurant.state,
+      cuisineTypes: r.restaurant.cuisineTypes || [],
+      distance: null
+    }));
   }
 
   async incrementDealView(dealId: string): Promise<void> {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { DealGrid } from "@/components/DealGrid";
 import { SearchFilters } from "@/components/SearchFilters";
 import { RestaurantCard } from "@/components/RestaurantCard";
@@ -14,6 +15,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import type { Deal } from "@shared/schema";
 
 // todo: remove mock functionality
 const mockDeals = [
@@ -85,12 +87,75 @@ const mockRestaurants = [
   },
 ];
 
+// Transform deal data from backend to frontend format
+const transformDeal = (apiDeal: any): any => {
+  return {
+    id: apiDeal.id,
+    restaurantName: apiDeal.restaurantName || "Restaurant", 
+    dealTitle: apiDeal.title,
+    originalPrice: parseFloat(apiDeal.originalPrice),
+    dealPrice: parseFloat(apiDeal.dealPrice),
+    imageUrl: apiDeal.imageUrl || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&h=300&fit=crop",
+    timeRemaining: apiDeal.endTime ? formatTimeRemaining(new Date(apiDeal.endTime)) : "N/A",
+    distance: apiDeal.distance ? `${apiDeal.distance.toFixed(1)} mi` : "N/A",
+    rating: 4.5, // Placeholder until we have restaurant ratings
+    cuisineType: apiDeal.cuisineTypes?.length > 0 ? apiDeal.cuisineTypes[0] : "Various",
+    isFavorite: false, // We'll implement favorites later
+  };
+};
+
+// Helper function to format time remaining
+const formatTimeRemaining = (endTime: Date): string => {
+  const now = new Date();
+  const diff = endTime.getTime() - now.getTime();
+  if (diff <= 0) return "Expired";
+  
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+};
+
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
-  const [location, setLocation] = useState("San Francisco, CA");
+  const [location, setLocation] = useState("75035"); // Default to Frisco, TX zip code
   const [sortBy, setSortBy] = useState("distance");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
+
+  // Build query URL with parameters
+  const buildDealsQuery = () => {
+    const params = new URLSearchParams();
+    
+    if (searchQuery.trim()) {
+      params.append('q', searchQuery);
+    }
+    
+    if (location.trim()) {
+      params.append('location', location);
+      params.append('radius', '10'); // Default 10 mile radius
+    }
+    
+    if (selectedCuisines.length > 0) {
+      params.append('cuisineTypes', selectedCuisines.join(','));
+    }
+    
+    params.append('limit', '50');
+    
+    return `/api/deals${params.toString() ? '?' + params.toString() : ''}`;
+  };
+
+  // Fetch deals using useQuery
+  const { data: dealsData = [], isLoading: dealsLoading, error: dealsError } = useQuery<Deal[]>({
+    queryKey: [buildDealsQuery()],
+    enabled: true,
+  });
+
+  // Transform deals for display
+  const deals = dealsData.map(transformDeal);
 
   const handleCuisineToggle = (cuisine: string) => {
     setSelectedCuisines(prev => 
@@ -213,9 +278,17 @@ export default function Home() {
                 Available Deals
               </h3>
               <Badge variant="outline">
-                {mockDeals.length} deals found
+                {dealsLoading ? "Loading..." : `${deals.length} deals found`}
               </Badge>
             </div>
+            
+            {dealsError && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+                <p className="text-destructive">
+                  Failed to load deals. Please try again later.
+                </p>
+              </div>
+            )}
             
             {viewMode === "map" ? (
               <div className="bg-muted/30 rounded-lg p-12 text-center">
@@ -227,7 +300,8 @@ export default function Home() {
               </div>
             ) : (
               <DealGrid 
-                deals={mockDeals}
+                deals={deals}
+                loading={dealsLoading}
                 onFavoriteToggle={(dealId) => console.log('Favorite toggled:', dealId)}
                 onDealClick={(dealId) => console.log('Deal clicked:', dealId)}
               />
