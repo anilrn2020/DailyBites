@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { publicInsertRestaurantSchema } from "@shared/schema";
@@ -30,6 +31,21 @@ type RestaurantSignupData = z.infer<typeof restaurantSignupSchema>;
 export default function RestaurantSignup() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  // Handler for address autocomplete selection
+  const handleAddressSelect = (address: { 
+    street?: string; 
+    city: string; 
+    state: string; 
+    zipCode?: string; 
+  }) => {
+    // Auto-populate city, state, and zip code fields when address is selected
+    form.setValue("restaurant.city", address.city);
+    form.setValue("restaurant.state", address.state);
+    if (address.zipCode) {
+      form.setValue("restaurant.zipCode", address.zipCode);
+    }
+  };
   
   const form = useForm<RestaurantSignupData>({
     resolver: zodResolver(restaurantSignupSchema),
@@ -234,7 +250,13 @@ export default function RestaurantSignup() {
                       <FormItem>
                         <FormLabel>Street Address</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-restaurant-address" />
+                          <AddressAutocomplete 
+                            value={field.value}
+                            onChange={field.onChange}
+                            onAddressSelect={handleAddressSelect}
+                            placeholder="Start typing an address..."
+                            data-testid="input-restaurant-address"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

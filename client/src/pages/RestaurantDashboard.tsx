@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, 
@@ -136,6 +137,21 @@ export default function RestaurantDashboard() {
       phone: "",
     },
   });
+
+  // Handler for address autocomplete selection in restaurant settings
+  const handleAddressSelect = (address: { 
+    street?: string; 
+    city: string; 
+    state: string; 
+    zipCode?: string; 
+  }) => {
+    // Auto-populate city, state, and zip code fields when address is selected
+    restaurantForm.setValue("city", address.city);
+    restaurantForm.setValue("state", address.state);
+    if (address.zipCode) {
+      restaurantForm.setValue("zipCode", address.zipCode);
+    }
+  };
 
   // Reset form with restaurant data when dialog opens
   useEffect(() => {
@@ -732,7 +748,13 @@ export default function RestaurantDashboard() {
                       <FormItem>
                         <FormLabel>Address</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-restaurant-address" />
+                          <AddressAutocomplete 
+                            value={field.value}
+                            onChange={field.onChange}
+                            onAddressSelect={handleAddressSelect}
+                            placeholder="Start typing an address..."
+                            data-testid="input-restaurant-address"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
