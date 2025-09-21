@@ -15,10 +15,35 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import type { Deal, User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+
+// Customer profile update schema
+const customerProfileSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+});
+
+type CustomerProfile = z.infer<typeof customerProfileSchema>;
 
 
 // Transform deal data from backend to frontend format
@@ -59,7 +84,22 @@ const formatTimeRemaining = (endTime: Date): string => {
 export default function Home() {
   const { user } = useAuth() as { user: User | null; isLoading: boolean; isAuthenticated: boolean };
   const [location, setLocation] = useState(""); // Will be set to user's city
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
   const { toast } = useToast();
+
+  // Profile form
+  const profileForm = useForm<CustomerProfile>({
+    resolver: zodResolver(customerProfileSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      address: "",
+      city: "",
+      state: "",
+      zipCode: "",
+    },
+  });
 
   // Set default location to user's city when user data is available
   useEffect(() => {
@@ -67,6 +107,21 @@ export default function Home() {
       setLocation(`${user.city}, ${user.state}`);
     }
   }, [user, location]);
+
+  // Populate profile form when user data is available
+  useEffect(() => {
+    if (user && showProfileDialog) {
+      profileForm.reset({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        address: user.address || "",
+        city: user.city || "",
+        state: user.state || "",
+        zipCode: user.zipCode || "",
+      });
+    }
+  }, [user, showProfileDialog, profileForm]);
 
   // Build query URL with parameters (simplified to just location)
   const buildDealsQuery = () => {
@@ -162,6 +217,34 @@ export default function Home() {
     },
   });
 
+  // Profile update mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: (data: CustomerProfile) => 
+      apiRequest("PATCH", "/api/profile", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      setShowProfileDialog(false);
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      let message = "Failed to update profile";
+      try {
+        const errorData = JSON.parse(error.message);
+        if (errorData.error) {
+          message = errorData.error;
+        }
+      } catch {}
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Transform deals for display
   const deals = dealsData.map(transformDeal);
 
@@ -184,6 +267,14 @@ export default function Home() {
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
+  };
+
+  const handleProfileClick = () => {
+    setShowProfileDialog(true);
+  };
+
+  const handleProfileSubmit = (data: CustomerProfile) => {
+    updateProfileMutation.mutate(data);
   };
 
   return (
@@ -236,7 +327,7 @@ export default function Home() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => console.log('Profile clicked')}>
+                <DropdownMenuItem onClick={handleProfileClick}>
                   <UserIcon className="h-4 w-4 mr-2" />
                   Profile
                 </DropdownMenuItem>
@@ -459,6 +550,139 @@ export default function Home() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Profile Dialog */}
+      <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+            <DialogDescription>
+              Update your personal information and address details.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...profileForm}>
+            <form onSubmit={profileForm.handleSubmit(handleProfileSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={profileForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter first name" {...field} data-testid="input-first-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter last name" {...field} data-testid="input-last-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={profileForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="Enter email" {...field} data-testid="input-email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={profileForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter street address" {...field} data-testid="input-address" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={profileForm.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>City</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter city" {...field} data-testid="input-city" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="state"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>State</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter state" {...field} data-testid="input-state" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <FormField
+                control={profileForm.control}
+                name="zipCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Zip Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter zip code" {...field} data-testid="input-zip-code" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="flex justify-end gap-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowProfileDialog(false)}
+                  data-testid="button-cancel-profile"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={updateProfileMutation.isPending}
+                  data-testid="button-save-profile"
+                >
+                  {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

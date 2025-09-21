@@ -234,7 +234,12 @@ export const publicUpdateDealSchema = insertDealSchema.partial().omit({
 export const updateUserProfileSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
+  email: z.string().email().optional(),
   profileImageUrl: z.string().url().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
 });
 
 // Customer signup schema
