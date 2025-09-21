@@ -461,9 +461,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const restaurantData = publicInsertRestaurantSchema.parse(req.body);
+      
+      // Automatically populate coordinates if missing
+      let coordinates = null;
+      if (!restaurantData.latitude || !restaurantData.longitude) {
+        // Try to get coordinates from zip code first
+        if (restaurantData.zipCode) {
+          coordinates = parseLocation(restaurantData.zipCode);
+        }
+        // If no coordinates from zip code, try city, state
+        if (!coordinates && restaurantData.city && restaurantData.state) {
+          coordinates = parseLocation(`${restaurantData.city}, ${restaurantData.state}`);
+        }
+      }
+      
       const restaurant = await storage.createRestaurant({
         ...restaurantData,
         ownerId: req.user.id,
+        latitude: coordinates?.lat.toString() || restaurantData.latitude,
+        longitude: coordinates?.lng.toString() || restaurantData.longitude,
       });
       
       // Update user type to restaurant owner
@@ -474,6 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(201).json(restaurant);
     } catch (error) {
+      console.error("Failed to create restaurant:", error);
       res.status(400).json({ error: "Failed to create restaurant" });
     }
   });
@@ -498,9 +515,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updates = publicUpdateRestaurantSchema.parse(req.body);
-      const updatedRestaurant = await storage.updateRestaurant(restaurant.id, updates);
+      
+      // If location data is being updated and coordinates are missing, populate them
+      let coordinates = null;
+      const locationChanged = updates.zipCode || updates.city || updates.state;
+      const coordinatesMissing = !updates.latitude || !updates.longitude;
+      
+      if (locationChanged && coordinatesMissing) {
+        // Try to get coordinates from zip code first
+        if (updates.zipCode) {
+          coordinates = parseLocation(updates.zipCode);
+        }
+        // If no coordinates from zip code, try city, state
+        if (!coordinates && updates.city && updates.state) {
+          coordinates = parseLocation(`${updates.city}, ${updates.state}`);
+        }
+        // Fallback to existing restaurant city/state if only partial update
+        if (!coordinates && (updates.city || updates.state)) {
+          const city = updates.city || restaurant.city;
+          const state = updates.state || restaurant.state;
+          if (city && state) {
+            coordinates = parseLocation(`${city}, ${state}`);
+          }
+        }
+      }
+      
+      const finalUpdates = {
+        ...updates,
+        ...(coordinates && {
+          latitude: coordinates.lat.toString(),
+          longitude: coordinates.lng.toString(),
+        })
+      };
+      
+      const updatedRestaurant = await storage.updateRestaurant(restaurant.id, finalUpdates);
       res.json(updatedRestaurant);
     } catch (error) {
+      console.error("Failed to update restaurant:", error);
       res.status(400).json({ error: "Failed to update restaurant" });
     }
   });
