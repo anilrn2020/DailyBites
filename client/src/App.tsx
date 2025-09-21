@@ -31,9 +31,8 @@ function Router() {
     );
   }
 
-  // Determine if user is a restaurant owner (mock logic for prototype)
-  // In real implementation, this would check user role/type from the backend
-  const isRestaurantOwner = (user as any)?.email?.includes('restaurant') || (user as any)?.role === 'restaurant';
+  // Determine if user is a restaurant owner based on userType from authentication
+  const isRestaurantOwner = (user as any)?.userType === 'restaurant';
 
   return (
     <Switch>
