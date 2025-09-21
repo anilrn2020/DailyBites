@@ -93,7 +93,7 @@ export function DealCard({
           {dealTitle}
         </h3>
         
-        <p className="text-sm text-muted-foreground mb-1" data-testid={`text-restaurant-${id}`}>
+        <p className="text-sm text-muted-foreground mb-1 font-semibold" data-testid={`text-restaurant-${id}`}>
           {restaurantName}
         </p>
         
