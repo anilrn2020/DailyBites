@@ -269,6 +269,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         longitude: restaurantData.longitude || null,
       };
 
+      // Auto-geocode coordinates if not provided but address info exists
+      if (!cleanRestaurantData.latitude || !cleanRestaurantData.longitude) {
+        if (cleanRestaurantData.zipCode) {
+          const coords = parseLocation(cleanRestaurantData.zipCode);
+          if (coords) {
+            cleanRestaurantData.latitude = coords.lat.toString();
+            cleanRestaurantData.longitude = coords.lng.toString();
+          }
+        } else if (cleanRestaurantData.city && cleanRestaurantData.state) {
+          const locationStr = `${cleanRestaurantData.city}, ${cleanRestaurantData.state}`;
+          const coords = parseLocation(locationStr);
+          if (coords) {
+            cleanRestaurantData.latitude = coords.lat.toString();
+            cleanRestaurantData.longitude = coords.lng.toString();
+          }
+        }
+      }
+
       try {
         // Hash password before storing
         const hashedPassword = await bcrypt.hash(userData.password, 12);

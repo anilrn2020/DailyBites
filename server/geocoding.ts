@@ -104,6 +104,7 @@ const CITY_STATE_TO_COORDS: Record<string, Coordinates> = {
   "pittsburgh,pa": { lat: 40.4406, lng: -79.9959 },
   "greensboro,nc": { lat: 36.0726, lng: -79.7920 },
   "plano,tx": { lat: 33.0198, lng: -96.6989 },
+  "frisco,tx": { lat: 33.1507, lng: -96.8236 },
   "lincoln,ne": { lat: 40.8136, lng: -96.7026 },
   "anchorage,ak": { lat: 61.2181, lng: -149.9003 },
   "buffalo,ny": { lat: 42.8864, lng: -78.8784 },
