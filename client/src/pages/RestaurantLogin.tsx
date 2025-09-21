@@ -8,7 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { restaurantLoginSchema, type RestaurantLogin } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 
 export default function RestaurantLogin() {
@@ -26,10 +26,14 @@ export default function RestaurantLogin() {
   const loginMutation = useMutation({
     mutationFn: (data: RestaurantLogin) => apiRequest("POST", "/api/login/restaurant", data),
     onSuccess: () => {
+      // Invalidate auth query to refetch user data
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
       toast({
         title: "Login successful",
         description: "Welcome back to your restaurant dashboard!",
       });
+      
       // Redirect to root path which handles user type routing correctly
       setLocation("/");
     },

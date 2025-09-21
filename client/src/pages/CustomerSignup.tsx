@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { customerSignupSchema, type CustomerSignup } from "@shared/schema";
 import { ArrowLeft } from "lucide-react";
 
@@ -28,10 +28,14 @@ export default function CustomerSignup() {
   const signupMutation = useMutation({
     mutationFn: (data: CustomerSignup) => apiRequest("POST", "/api/signup/customer", data),
     onSuccess: () => {
+      // Invalidate auth query to refetch user data
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
       toast({ 
         title: "Registration successful!", 
         description: "Welcome to Today's Special. You're now logged in." 
       });
+      
       // Navigate to home page after successful signup
       setLocation("/");
     },

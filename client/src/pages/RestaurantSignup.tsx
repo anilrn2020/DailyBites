@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { publicInsertRestaurantSchema } from "@shared/schema";
 import { ArrowLeft } from "lucide-react";
 
@@ -75,10 +75,14 @@ export default function RestaurantSignup() {
   const signupMutation = useMutation({
     mutationFn: (data: RestaurantSignupData) => apiRequest("POST", "/api/signup/restaurant", data),
     onSuccess: () => {
+      // Invalidate auth query to refetch user data
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
       toast({ 
         title: "Registration successful!", 
         description: "Welcome to Today's Special. You're now logged in." 
       });
+      
       // Navigate to dashboard after successful signup
       setLocation("/dashboard");
     },

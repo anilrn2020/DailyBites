@@ -7,6 +7,9 @@ interface DealCardProps {
   id: string;
   restaurantName: string;
   restaurantPhone?: string;
+  restaurantAddress?: string;
+  restaurantCity?: string;
+  restaurantState?: string;
   dealTitle: string;
   originalPrice: number;
   dealPrice: number;
@@ -22,6 +25,9 @@ export function DealCard({
   id,
   restaurantName,
   restaurantPhone,
+  restaurantAddress,
+  restaurantCity,
+  restaurantState,
   dealTitle,
   originalPrice,
   dealPrice,
@@ -87,9 +93,18 @@ export function DealCard({
           {dealTitle}
         </h3>
         
-        <p className="text-sm text-muted-foreground mb-2" data-testid={`text-restaurant-${id}`}>
+        <p className="text-sm text-muted-foreground mb-1" data-testid={`text-restaurant-${id}`}>
           {restaurantName}
         </p>
+        
+        {(restaurantAddress || restaurantCity || restaurantState) && (
+          <p className="text-xs text-muted-foreground mb-2 flex items-center" data-testid={`text-restaurant-address-${id}`}>
+            <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+            <span className="truncate">
+              {[restaurantAddress, restaurantCity, restaurantState].filter(Boolean).join(', ')}
+            </span>
+          </p>
+        )}
         
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
