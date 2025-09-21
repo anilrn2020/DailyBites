@@ -45,24 +45,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Authentication routes
-  app.get("/api/login", (req: any, res: any) => {
-    // For development, simulate authentication by creating a test user session
-    const testUserId = "test-user-1";
-    req.session.userId = testUserId;
-    
-    // Create/upsert a test user
-    storage.upsertUser({
-      id: testUserId,
-      email: "restaurant@test.com",
-      firstName: "Restaurant",
-      lastName: "Owner",
-      userType: "restaurant",
-    }).then(() => {
-      res.redirect("/");
-    }).catch((error) => {
+  app.get("/api/login", async (req: any, res: any) => {
+    try {
+      // For development, simulate authentication by creating a test user session
+      const testUserId = "test-user-1";
+      
+      // Create/upsert user first
+      await storage.upsertUser({
+        id: testUserId,
+        email: "restaurant@test.com",
+        firstName: "Restaurant",
+        lastName: "Owner",
+        userType: "restaurant",
+      });
+      
+      // Set session
+      req.session.userId = testUserId;
+      
+      // Save session explicitly before redirect
+      req.session.save((err: any) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "Login failed" });
+        }
+        res.redirect("/");
+      });
+    } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Login failed" });
-    });
+    }
   });
 
   app.get("/api/logout", (req: any, res: any) => {
