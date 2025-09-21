@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Heart, User, LogOut, Grid3X3, List, Map } from "lucide-react";
+import { Heart, User, LogOut, Grid3X3, List, Map, DollarSign } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,75 +17,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Deal } from "@shared/schema";
 
-// todo: remove mock functionality
-const mockDeals = [
-  {
-    id: "1",
-    restaurantName: "Mario's Italian Kitchen",
-    dealTitle: "Authentic Margherita Pizza with Fresh Basil",
-    originalPrice: 18.99,
-    dealPrice: 12.99,
-    imageUrl: "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&h=300&fit=crop",
-    timeRemaining: "2h 30m",
-    distance: "0.5 mi",
-    rating: 4.8,
-    cuisineType: "Italian",
-    isFavorite: false,
-  },
-  {
-    id: "2",
-    restaurantName: "Sakura Sushi",
-    dealTitle: "Premium Sashimi Platter for Two",
-    originalPrice: 45.00,
-    dealPrice: 29.99,
-    imageUrl: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=400&h=300&fit=crop",
-    timeRemaining: "1h 15m",
-    distance: "0.8 mi",
-    rating: 4.9,
-    cuisineType: "Japanese",
-    isFavorite: true,
-  },
-  {
-    id: "3",
-    restaurantName: "Taco Libre",
-    dealTitle: "Street Taco Trio with Guacamole",
-    originalPrice: 14.50,
-    dealPrice: 9.99,
-    imageUrl: "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=300&fit=crop",
-    timeRemaining: "3h 45m",
-    distance: "1.2 mi",
-    rating: 4.5,
-    cuisineType: "Mexican",
-    isFavorite: false,
-  },
-];
-
-const mockRestaurants = [
-  {
-    id: "rest-1",
-    name: "Bella Vista Restaurant",
-    imageUrl: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop",
-    rating: 4.6,
-    reviewCount: 234,
-    cuisineTypes: ["Italian", "Mediterranean"],
-    distance: "1.2 mi",
-    estimatedDelivery: "25-40 min",
-    activeDealCount: 3,
-    isFavorite: true,
-  },
-  {
-    id: "rest-2",
-    name: "Golden Dragon",
-    imageUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&h=300&fit=crop",
-    rating: 4.8,
-    reviewCount: 156,
-    cuisineTypes: ["Chinese", "Asian"],
-    distance: "0.9 mi",
-    estimatedDelivery: "20-35 min",
-    activeDealCount: 2,
-    isFavorite: false,
-  },
-];
 
 // Transform deal data from backend to frontend format
 const transformDeal = (apiDeal: any): any => {
@@ -148,9 +79,15 @@ export default function Home() {
     return `/api/deals${params.toString() ? '?' + params.toString() : ''}`;
   };
 
-  // Fetch deals using useQuery
+  // Fetch deals using useQuery with structured cache keys
   const { data: dealsData = [], isLoading: dealsLoading, error: dealsError } = useQuery<Deal[]>({
-    queryKey: [buildDealsQuery()],
+    queryKey: ["/api/deals", { 
+      q: searchQuery.trim() || undefined, 
+      location: location.trim() || undefined, 
+      radius: location.trim() ? "10" : undefined,
+      cuisineTypes: selectedCuisines.length > 0 ? selectedCuisines.join(',') : undefined,
+      limit: "50"
+    }],
     enabled: true,
   });
 
@@ -296,12 +233,22 @@ export default function Home() {
               </div>
             )}
             
-            {viewMode === "map" ? (
+{viewMode === "map" ? (
               <div className="bg-muted/30 rounded-lg p-12 text-center">
                 <Map className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h4 className="font-semibold mb-2">Map View</h4>
                 <p className="text-muted-foreground">
                   Interactive map showing deals would be displayed here
+                </p>
+              </div>
+            ) : deals.length === 0 && !dealsLoading ? (
+              <div className="text-center py-12">
+                <div className="h-12 w-12 mx-auto mb-4 text-muted-foreground bg-muted rounded-full flex items-center justify-center">
+                  <DollarSign className="h-6 w-6" />
+                </div>
+                <h4 className="font-semibold mb-2">No deals found</h4>
+                <p className="text-muted-foreground mb-4">
+                  {location.trim() ? `No deals found in ${location}. Try expanding your search area or removing filters.` : "No active deals at the moment. Check back soon!"}
                 </p>
               </div>
             ) : (
@@ -332,25 +279,37 @@ export default function Home() {
               </div>
             )}
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {restaurantsData.map((restaurant) => (
-                <RestaurantCard
-                  key={restaurant.id}
-                  id={restaurant.id}
-                  name={restaurant.name}
-                  imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
-                  rating={parseFloat(restaurant.rating) || 4.5}
-                  reviewCount={restaurant.reviewCount || 0}
-                  cuisineTypes={restaurant.cuisineTypes || []}
-                  distance="N/A" // We'll calculate this later with geolocation
-                  estimatedDelivery="25-40 min" // Placeholder
-                  activeDealCount={0} // We'll calculate this later
-                  isFavorite={false} // We'll implement favorites later
-                  onFavoriteToggle={(id) => console.log('Restaurant favorite toggled:', id)}
-                  onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
-                />
-              ))}
-            </div>
+{restaurantsData.length === 0 && !restaurantsLoading ? (
+              <div className="text-center py-12">
+                <div className="h-12 w-12 mx-auto mb-4 text-muted-foreground bg-muted rounded-full flex items-center justify-center">
+                  <User className="h-6 w-6" />
+                </div>
+                <h4 className="font-semibold mb-2">No restaurants found</h4>
+                <p className="text-muted-foreground">
+                  No restaurants available at the moment. Check back soon!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {restaurantsData.map((restaurant) => (
+                  <RestaurantCard
+                    key={restaurant.id}
+                    id={restaurant.id}
+                    name={restaurant.name}
+                    imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
+                    rating={parseFloat(restaurant.rating) || 4.5}
+                    reviewCount={restaurant.reviewCount || 0}
+                    cuisineTypes={restaurant.cuisineTypes || []}
+                    distance="N/A" // We'll calculate this later with geolocation
+                    estimatedDelivery="25-40 min" // Placeholder
+                    activeDealCount={0} // We'll calculate this later
+                    isFavorite={false} // We'll implement favorites later
+                    onFavoriteToggle={(id) => console.log('Restaurant favorite toggled:', id)}
+                    onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
+                  />
+                ))}
+              </div>
+            )}
           </TabsContent>
           
           <TabsContent value="favorites" className="mt-6">
