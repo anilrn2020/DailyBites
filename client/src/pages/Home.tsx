@@ -125,12 +125,12 @@ export default function Home() {
     }
   }, [user, showProfileDialog, profileForm]);
 
-  // Build query URL with parameters (using zip code)
+  // Build query URL with parameters (using location for zip code)
   const buildDealsQuery = () => {
     const params = new URLSearchParams();
     
     if (zipCode.trim()) {
-      params.append('zipCode', zipCode);
+      params.append('location', zipCode); // Use 'location' parameter that the API expects
       params.append('radius', '25'); // Default 25 mile radius for broader search
     }
     
@@ -358,7 +358,7 @@ export default function Home() {
             <div className="flex-1">
               <Input
                 type="text"
-                placeholder="Enter location zip code"
+                placeholder="Enter Zip code"
                 value={zipCode}
                 onChange={(e) => setZipCode(e.target.value)}
                 className="text-center"
