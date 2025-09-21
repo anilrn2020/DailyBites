@@ -44,6 +44,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
+  // Authentication routes
+  app.get("/api/login", (req: any, res: any) => {
+    // For development, simulate authentication by creating a test user session
+    const testUserId = "test-user-1";
+    req.session.userId = testUserId;
+    
+    // Create/upsert a test user
+    storage.upsertUser({
+      id: testUserId,
+      email: "restaurant@test.com",
+      firstName: "Restaurant",
+      lastName: "Owner",
+      userType: "restaurant",
+    }).then(() => {
+      res.redirect("/");
+    }).catch((error) => {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Login failed" });
+    });
+  });
+
+  app.get("/api/logout", (req: any, res: any) => {
+    req.session.destroy(() => {
+      res.redirect("/");
+    });
+  });
+
   // Authentication endpoint for frontend
   app.get("/api/auth/user", async (req: any, res: any) => {
     const user = await getAuthenticatedUser(req);
