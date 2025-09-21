@@ -9,11 +9,13 @@ import {
   publicUpdateRestaurantSchema,
   publicUpdateDealSchema,
   updateUserProfileSchema,
+  customerSignupSchema,
   publicRestaurantSchema,
   type User,
   type Restaurant,
   type Deal,
   type PublicRestaurant,
+  type CustomerSignup,
 } from "@shared/schema";
 import { storage } from "./storage";
 
@@ -161,33 +163,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         longitude: restaurantData.longitude || null,
       };
 
-      // Create user first
-      const user = await storage.upsertUser({
-        ...userData,
-        userType: "restaurant" as const,
-      });
-      
-      // Create restaurant
-      const restaurant = await storage.createRestaurant({
-        ...cleanRestaurantData,
-        ownerId: user.id,
-      });
-      
-      // Set session for immediate login
-      req.session.userId = user.id;
-      
-      // Save session and return success
-      req.session.save((err: any) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ error: "Signup successful but login failed" });
-        }
-        res.status(201).json({ 
-          user, 
-          restaurant,
-          message: "Restaurant registered successfully" 
+      try {
+        // Create user first
+        const user = await storage.upsertUser({
+          ...userData,
+          userType: "restaurant" as const,
         });
-      });
+        
+        // Check if user already has a restaurant
+        const existingRestaurant = await storage.getRestaurantByOwnerId(user.id);
+        if (existingRestaurant) {
+          return res.status(409).json({ 
+            error: "Restaurant already exists", 
+            details: "User already has a restaurant account" 
+          });
+        }
+        
+        // Create restaurant
+        const restaurant = await storage.createRestaurant({
+          ...cleanRestaurantData,
+          ownerId: user.id,
+        });
+        
+        // Set session for immediate login
+        req.session.userId = user.id;
+        
+        // Save session and return success
+        req.session.save((err: any) => {
+          if (err) {
+            console.error("Session save error:", err);
+            return res.status(500).json({ error: "Signup successful but login failed" });
+          }
+          res.status(201).json({ 
+            user, 
+            restaurant,
+            message: "Restaurant registered successfully" 
+          });
+        });
+      } catch (dbError: any) {
+        // Check for email uniqueness constraint violation
+        if (dbError.code === '23505' && dbError.constraint?.includes('email')) {
+          return res.status(409).json({ 
+            error: "Email already exists",
+            details: "An account with this email address already exists"
+          });
+        }
+        throw dbError;
+      }
     } catch (error) {
       console.error("Restaurant signup error:", error);
       if (error instanceof z.ZodError) {
@@ -197,6 +219,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(400).json({ error: "Failed to register restaurant" });
+    }
+  });
+
+  // Customer signup route
+  app.post("/api/signup/customer", async (req: any, res: any) => {
+    try {
+      const body = req.body;
+      
+      // Validate customer data
+      const customerData = customerSignupSchema.parse(body);
+      
+      try {
+        // Create customer user
+        const user = await storage.upsertUser({
+          ...customerData,
+          userType: "customer" as const,
+        });
+        
+        // Set session for immediate login
+        req.session.userId = user.id;
+        
+        // Save session and return success
+        req.session.save((err: any) => {
+          if (err) {
+            console.error("Session save error:", err);
+            return res.status(500).json({ error: "Signup successful but login failed" });
+          }
+          res.status(201).json({ 
+            user, 
+            message: "Customer registered successfully" 
+          });
+        });
+      } catch (dbError: any) {
+        // Check for email uniqueness constraint violation
+        if (dbError.code === '23505' && dbError.constraint?.includes('email')) {
+          return res.status(409).json({ 
+            error: "Email already exists",
+            details: "An account with this email address already exists"
+          });
+        }
+        throw dbError;
+      }
+    } catch (error) {
+      console.error("Customer signup error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: error.errors.map(e => e.message).join(", ")
+        });
+      }
+      res.status(400).json({ error: "Failed to register customer" });
     }
   });
 

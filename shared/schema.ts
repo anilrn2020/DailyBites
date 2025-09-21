@@ -224,6 +224,13 @@ export const updateUserProfileSchema = z.object({
   profileImageUrl: z.string().url().optional(),
 });
 
+// Customer signup schema
+export const customerSignupSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+});
+
 // Public restaurant response (hide internal fields)
 export const publicRestaurantSchema = z.object({
   id: z.string(),
@@ -262,3 +269,4 @@ export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
 export type Favorite = typeof favorites.$inferSelect;
 export type DealAnalytic = typeof dealAnalytics.$inferSelect;
 export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
+export type CustomerSignup = z.infer<typeof customerSignupSchema>;

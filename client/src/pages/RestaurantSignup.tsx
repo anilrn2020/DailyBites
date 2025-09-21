@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +28,7 @@ type RestaurantSignupData = z.infer<typeof restaurantSignupSchema>;
 
 export default function RestaurantSignup() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   const form = useForm<RestaurantSignupData>({
     resolver: zodResolver(restaurantSignupSchema),
@@ -60,13 +61,30 @@ export default function RestaurantSignup() {
         title: "Registration successful!", 
         description: "Welcome to Today's Special. You're now logged in." 
       });
-      // Redirect to dashboard after successful signup
-      window.location.href = "/dashboard";
+      // Navigate to dashboard after successful signup
+      setLocation("/dashboard");
     },
     onError: (error: any) => {
-      const message = error.message.includes("Email already exists") 
-        ? "An account with this email already exists" 
-        : "Failed to register restaurant. Please try again.";
+      let message = "Failed to register restaurant. Please try again.";
+      
+      try {
+        const errorData = JSON.parse(error.message);
+        if (errorData.error === "Email already exists") {
+          message = "An account with this email already exists";
+        } else if (errorData.error === "Restaurant already exists") {
+          message = "User already has a restaurant account";
+        } else if (errorData.details) {
+          message = errorData.details;
+        }
+      } catch {
+        // If error parsing fails, use simple string matching
+        if (error.message.includes("Email already exists")) {
+          message = "An account with this email already exists";
+        } else if (error.message.includes("Restaurant already exists")) {
+          message = "User already has a restaurant account";
+        }
+      }
+      
       toast({ 
         title: "Registration failed", 
         description: message, 
