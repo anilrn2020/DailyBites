@@ -25,6 +25,7 @@ const transformDeal = (apiDeal: any): any => {
   return {
     id: apiDeal.id,
     restaurantName: apiDeal.restaurantName || "Restaurant", 
+    restaurantPhone: apiDeal.restaurantPhone,
     dealTitle: apiDeal.title,
     originalPrice: parseFloat(apiDeal.originalPrice),
     dealPrice: parseFloat(apiDeal.dealPrice),
@@ -33,7 +34,6 @@ const transformDeal = (apiDeal: any): any => {
     distance: apiDeal.distance ? `${apiDeal.distance.toFixed(1)} mi` : "N/A",
     rating: 4.5, // Placeholder until we have restaurant ratings
     cuisineType: apiDeal.cuisineTypes?.length > 0 ? apiDeal.cuisineTypes[0] : "Various",
-    isFavorite: false, // We'll implement favorites later
   };
 };
 

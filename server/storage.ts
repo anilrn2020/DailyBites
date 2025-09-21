@@ -274,6 +274,7 @@ export class DatabaseStorage implements IStorage {
           return {
             ...r.deal,
             restaurantName: r.restaurant.name,
+            restaurantPhone: r.restaurant.phone,
             restaurantAddress: r.restaurant.address,
             restaurantCity: r.restaurant.city,
             restaurantState: r.restaurant.state,
@@ -289,6 +290,7 @@ export class DatabaseStorage implements IStorage {
     return results.map(r => ({
       ...r.deal,
       restaurantName: r.restaurant.name,
+      restaurantPhone: r.restaurant.phone,
       restaurantAddress: r.restaurant.address,
       restaurantCity: r.restaurant.city,
       restaurantState: r.restaurant.state,

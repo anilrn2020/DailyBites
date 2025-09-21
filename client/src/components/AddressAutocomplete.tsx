@@ -16,29 +16,18 @@ interface AddressAutocompleteProps {
   "data-testid"?: string;
 }
 
-// Sample address data for autocomplete - in production this would come from an API
-const SAMPLE_ADDRESSES = [
-  { street: "123 Main St", city: "New York", state: "NY", zipCode: "10001" },
-  { street: "456 Broadway", city: "New York", state: "NY", zipCode: "10002" },
-  { street: "789 Oak Ave", city: "Los Angeles", state: "CA", zipCode: "90210" },
-  { street: "321 Pine St", city: "Beverly Hills", state: "CA", zipCode: "90211" },
-  { street: "654 Elm Dr", city: "Chicago", state: "IL", zipCode: "60601" },
-  { street: "987 Maple Ln", city: "Chicago", state: "IL", zipCode: "60602" },
-  { street: "147 Cedar Blvd", city: "Dallas", state: "TX", zipCode: "75201" },
-  { street: "258 Birch Way", city: "Dallas", state: "TX", zipCode: "75202" },
-  { street: "369 Spruce Ct", city: "Frisco", state: "TX", zipCode: "75035" },
-  { street: "741 Willow Rd", city: "Miami", state: "FL", zipCode: "33101" },
-  { street: "852 Cherry St", city: "Miami", state: "FL", zipCode: "33102" },
-  { street: "963 Ash Ave", city: "San Francisco", state: "CA", zipCode: "94102" },
-  { street: "159 Poplar Dr", city: "San Francisco", state: "CA", zipCode: "94103" },
-  { street: "267 Hickory Ln", city: "Seattle", state: "WA", zipCode: "98101" },
-  { street: "348 Sycamore St", city: "Seattle", state: "WA", zipCode: "98102" },
-  { street: "426 Dogwood Ct", city: "Atlanta", state: "GA", zipCode: "30309" },
-  { street: "537 Magnolia Way", city: "Atlanta", state: "GA", zipCode: "30310" },
-  { street: "648 Peach Tree Rd", city: "Boston", state: "MA", zipCode: "02101" },
-  { street: "759 Apple Blossom Dr", city: "Boston", state: "MA", zipCode: "02102" },
-  { street: "860 Orange Grove Ave", city: "Philadelphia", state: "PA", zipCode: "19101" },
-];
+interface NominatimResult {
+  place_id: string;
+  display_name: string;
+  address: {
+    house_number?: string;
+    road?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  };
+}
 
 export function AddressAutocomplete({ 
   value, 
@@ -48,45 +37,91 @@ export function AddressAutocomplete({
   className,
   ...props 
 }: AddressAutocompleteProps) {
-  const [suggestions, setSuggestions] = useState<typeof SAMPLE_ADDRESSES>([]);
+  const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLUListElement>(null);
+  const debounceTimerRef = useRef<number>();
 
   useEffect(() => {
-    if (value.trim().length < 2) {
+    if (value.trim().length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setLoading(false);
       return;
     }
 
-    const query = value.toLowerCase().trim();
-    const filtered = SAMPLE_ADDRESSES.filter(addr => {
-      const fullAddress = `${addr.street}, ${addr.city}, ${addr.state} ${addr.zipCode}`;
-      return fullAddress.toLowerCase().includes(query) ||
-             addr.street.toLowerCase().includes(query) ||
-             addr.city.toLowerCase().includes(query) ||
-             addr.state.toLowerCase().includes(query) ||
-             (addr.zipCode && addr.zipCode.includes(query));
-    }).slice(0, 8); // Limit to 8 suggestions
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
 
-    setSuggestions(filtered);
-    setShowSuggestions(filtered.length > 0);
-    setHighlightedIndex(-1);
+    // Debounce API calls
+    debounceTimerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const encodedQuery = encodeURIComponent(value.trim());
+        // Using Nominatim API with US-specific search
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=us&q=${encodedQuery}`,
+          {
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'TodaysSpecialApp/1.0'
+            }
+          }
+        );
+        
+        if (response.ok) {
+          const data: NominatimResult[] = await response.json();
+          // Filter for addresses that have meaningful address components
+          const validAddresses = data.filter(item => 
+            item.address && 
+            (item.address.city || item.address.town || item.address.village || item.address.hamlet) && 
+            item.address.state
+          );
+          
+          setSuggestions(validAddresses);
+          setShowSuggestions(validAddresses.length > 0);
+        }
+      } catch (error) {
+        console.error('Address search error:', error);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setLoading(false);
+      }
+      setHighlightedIndex(-1);
+    }, 300);
   }, [value]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.value);
   };
 
-  const handleSuggestionClick = (address: typeof SAMPLE_ADDRESSES[0]) => {
-    const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipCode}`;
+  const handleSuggestionClick = (result: NominatimResult) => {
+    // Parse the address components
+    const street = result.address.house_number && result.address.road 
+      ? `${result.address.house_number} ${result.address.road}`
+      : result.address.road || '';
+    
+    const city = result.address.city || result.address.town || result.address.village || result.address.hamlet || '';
+    const state = result.address.state || '';
+    const zipCode = result.address.postcode || '';
+    
+    const fullAddress = `${street}, ${city}, ${state} ${zipCode}`.replace(/,\s*,/g, ',').trim();
     onChange(fullAddress);
     setShowSuggestions(false);
     
-    if (onAddressSelect) {
-      onAddressSelect(address);
+    if (onAddressSelect && city && state) {
+      onAddressSelect({
+        street: street || undefined,
+        city,
+        state,
+        zipCode: zipCode || undefined,
+      });
     }
   };
 
@@ -139,30 +174,48 @@ export function AddressAutocomplete({
         {...props}
       />
       
-      {showSuggestions && suggestions.length > 0 && (
+      {showSuggestions && (
         <ul
           ref={suggestionsRef}
           className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-48 overflow-auto"
         >
-          {suggestions.map((address, index) => (
-            <li
-              key={`${address.street}-${address.city}-${address.zipCode}`}
-              className={cn(
-                "px-3 py-2 cursor-pointer text-sm hover:bg-muted",
-                highlightedIndex === index && "bg-muted"
-              )}
-              onMouseDown={(e) => e.preventDefault()} // Prevent input blur
-              onClick={() => handleSuggestionClick(address)}
-              onMouseEnter={() => setHighlightedIndex(index)}
-            >
-              <div className="font-medium">
-                {address.street}
-              </div>
-              <div className="text-muted-foreground text-xs">
-                {address.city}, {address.state} {address.zipCode}
-              </div>
+          {loading && (
+            <li className="px-3 py-2 text-sm text-muted-foreground">
+              Searching addresses...
             </li>
-          ))}
+          )}
+          {!loading && suggestions.length === 0 && value.trim().length >= 3 && (
+            <li className="px-3 py-2 text-sm text-muted-foreground">
+              No addresses found
+            </li>
+          )}
+          {!loading && suggestions.map((result, index) => {
+            const street = result.address.house_number && result.address.road 
+              ? `${result.address.house_number} ${result.address.road}`
+              : result.address.road || '';
+            
+            const city = result.address.city || result.address.town || result.address.village || result.address.hamlet || '';
+            
+            return (
+              <li
+                key={result.place_id}
+                className={cn(
+                  "px-3 py-2 cursor-pointer text-sm hover:bg-muted",
+                  highlightedIndex === index && "bg-muted"
+                )}
+                onMouseDown={(e) => e.preventDefault()} // Prevent input blur
+                onClick={() => handleSuggestionClick(result)}
+                onMouseEnter={() => setHighlightedIndex(index)}
+              >
+                <div className="font-medium">
+                  {street || city}
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  {city}, {result.address.state} {result.address.postcode}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

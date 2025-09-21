@@ -1,10 +1,12 @@
-import { Clock, MapPin, Star } from "lucide-react";
+import { Clock, MapPin, Star, Phone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface DealCardProps {
   id: string;
   restaurantName: string;
+  restaurantPhone?: string;
   dealTitle: string;
   originalPrice: number;
   dealPrice: number;
@@ -19,6 +21,7 @@ interface DealCardProps {
 export function DealCard({
   id,
   restaurantName,
+  restaurantPhone,
   dealTitle,
   originalPrice,
   dealPrice,
@@ -35,6 +38,13 @@ export function DealCard({
   const handleCardClick = () => {
     onDealClick?.(id);
     console.log(`Deal clicked: ${id}`);
+  };
+
+  const handleCallClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click when clicking call button
+    if (restaurantPhone) {
+      window.location.href = `tel:${restaurantPhone}`;
+    }
   };
 
   return (
@@ -96,9 +106,30 @@ export function DealCard({
           </div>
         </div>
         
-        <div className="text-xs text-primary font-medium">
-          Save ${savings.toFixed(2)}
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-primary font-medium">
+            Save ${savings.toFixed(2)}
+          </div>
+          {restaurantPhone && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCallClick}
+              className="gap-1 text-xs h-7"
+              data-testid={`button-call-${id}`}
+            >
+              <Phone className="h-3 w-3" />
+              Call to Order
+            </Button>
+          )}
         </div>
+        
+        {restaurantPhone && (
+          <div className="text-xs text-muted-foreground mt-1" data-testid={`text-phone-${id}`}>
+            <Phone className="h-3 w-3 inline mr-1" />
+            {restaurantPhone}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
