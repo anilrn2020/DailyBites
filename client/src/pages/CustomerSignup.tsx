@@ -21,6 +21,7 @@ export default function CustomerSignup() {
       firstName: "",
       lastName: "",
       email: "",
+      password: "",
     },
   });
 
@@ -142,6 +143,25 @@ export default function CustomerSignup() {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="password" 
+                          placeholder="Enter a password (min 8 characters)" 
+                          {...field} 
+                          data-testid="input-password"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <Button 
                   type="submit" 
                   className="w-full bg-orange-600 hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700" 
@@ -154,7 +174,7 @@ export default function CustomerSignup() {
                 <div className="text-center">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Already have an account?{" "}
-                    <Link href="/" data-testid="link-sign-in">
+                    <Link href="/login/customer" data-testid="link-sign-in">
                       <span className="text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 underline">
                         Sign In
                       </span>

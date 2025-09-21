@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import {
   insertRestaurantSchema,
   insertDealSchema,
@@ -10,12 +11,16 @@ import {
   publicUpdateDealSchema,
   updateUserProfileSchema,
   customerSignupSchema,
+  customerLoginSchema,
+  restaurantLoginSchema,
   publicRestaurantSchema,
   type User,
   type Restaurant,
   type Deal,
   type PublicRestaurant,
   type CustomerSignup,
+  type CustomerLogin,
+  type RestaurantLogin,
 } from "@shared/schema";
 import { storage } from "./storage";
 import { parseLocation } from "./geocoding";
@@ -49,83 +54,178 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Authentication routes
-  app.get("/api/login", async (req: any, res: any) => {
+  app.post("/api/login/restaurant", async (req: any, res: any) => {
     try {
-      // For development, simulate authentication by creating a test user session
-      const testUserId = "test-user-1";
+      const body = req.body;
       
-      // Create/upsert user first
-      await storage.upsertUser({
-        id: testUserId,
-        email: "restaurant@test.com",
-        firstName: "Restaurant",
-        lastName: "Owner",
-        userType: "restaurant",
-      });
+      // Validate login data
+      const loginData = restaurantLoginSchema.parse(body);
       
-      // Check if restaurant already exists, if not create one
-      let restaurant = await storage.getRestaurantByOwnerId(testUserId);
-      if (!restaurant) {
-        restaurant = await storage.createRestaurant({
-          name: "Test Restaurant",
-          description: "A test restaurant for development",
-          address: "123 Main St",
-          city: "Test City",
-          state: "TC",
-          zipCode: "12345",
-          phone: "(555) 123-4567",
-          email: "restaurant@test.com",
-          cuisineTypes: ["American"],
-          ownerId: testUserId,
+      // Normalize email to lowercase to prevent case sensitivity issues
+      const normalizedEmail = loginData.email.toLowerCase();
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(normalizedEmail);
+      if (!user) {
+        console.log(`Login attempt failed: User not found for email ${normalizedEmail}`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
         });
       }
       
-      // Set session
-      req.session.userId = testUserId;
+      // Check if user is a restaurant owner
+      if (user.userType !== "restaurant") {
+        console.log(`Login attempt failed: User ${normalizedEmail} is not a restaurant owner`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
+        });
+      }
       
-      // Save session explicitly before redirect
-      req.session.save((err: any) => {
+      // Validate password
+      if (!user.password) {
+        console.log(`Login attempt failed: User ${normalizedEmail} has no password set`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
+        });
+      }
+      
+      const isValidPassword = await bcrypt.compare(loginData.password, user.password);
+      if (!isValidPassword) {
+        console.log(`Login attempt failed: Invalid password for user ${normalizedEmail}`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
+        });
+      }
+      
+      // Regenerate session to prevent session fixation
+      req.session.regenerate((err: any) => {
         if (err) {
-          console.error("Session save error:", err);
+          console.error("Session regeneration error:", err);
           return res.status(500).json({ error: "Login failed" });
         }
-        res.redirect("/");
+        
+        // Set session
+        req.session.userId = user.id;
+        
+        // Save session and return success
+        req.session.save((saveErr: any) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ error: "Login failed" });
+          }
+          res.status(200).json({ 
+            message: "Login successful",
+            user: { 
+              id: user.id, 
+              email: user.email, 
+              firstName: user.firstName, 
+              lastName: user.lastName, 
+              userType: user.userType 
+            } 
+          });
+        });
       });
     } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ error: "Login failed" });
+      console.error("Restaurant login error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: error.errors.map(e => e.message).join(", ")
+        });
+      }
+      res.status(400).json({ error: "Login failed" });
     }
   });
 
   // Customer login route
-  app.get("/api/login/customer", async (req: any, res: any) => {
+  app.post("/api/login/customer", async (req: any, res: any) => {
     try {
-      // For development, simulate customer authentication by creating a test customer session
-      const testCustomerId = "test-customer-1";
+      const body = req.body;
       
-      // Create/upsert customer user
-      await storage.upsertUser({
-        id: testCustomerId,
-        email: "customer@test.com",
-        firstName: "Test",
-        lastName: "Customer",
-        userType: "customer",
-      });
+      // Validate login data
+      const loginData = customerLoginSchema.parse(body);
       
-      // Set session
-      req.session.userId = testCustomerId;
+      // Normalize email to lowercase to prevent case sensitivity issues
+      const normalizedEmail = loginData.email.toLowerCase();
       
-      // Save session explicitly before redirect
-      req.session.save((err: any) => {
+      // Find user by email
+      const user = await storage.getUserByEmail(normalizedEmail);
+      if (!user) {
+        console.log(`Login attempt failed: User not found for email ${normalizedEmail}`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
+        });
+      }
+      
+      // Check if user is a customer
+      if (user.userType !== "customer") {
+        console.log(`Login attempt failed: User ${normalizedEmail} is not a customer`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
+        });
+      }
+      
+      // Validate password
+      if (!user.password) {
+        console.log(`Login attempt failed: User ${normalizedEmail} has no password set`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
+        });
+      }
+      
+      const isValidPassword = await bcrypt.compare(loginData.password, user.password);
+      if (!isValidPassword) {
+        console.log(`Login attempt failed: Invalid password for user ${normalizedEmail}`);
+        return res.status(401).json({ 
+          error: "Invalid credentials",
+          details: "Invalid email or password"
+        });
+      }
+      
+      // Regenerate session to prevent session fixation
+      req.session.regenerate((err: any) => {
         if (err) {
-          console.error("Session save error:", err);
+          console.error("Session regeneration error:", err);
           return res.status(500).json({ error: "Login failed" });
         }
-        res.redirect("/");
+        
+        // Set session
+        req.session.userId = user.id;
+        
+        // Save session and return success
+        req.session.save((saveErr: any) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ error: "Login failed" });
+          }
+          res.status(200).json({ 
+            message: "Login successful",
+            user: { 
+              id: user.id, 
+              email: user.email, 
+              firstName: user.firstName, 
+              lastName: user.lastName, 
+              userType: user.userType 
+            } 
+          });
+        });
       });
     } catch (error) {
       console.error("Customer login error:", error);
-      res.status(500).json({ error: "Login failed" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: error.errors.map(e => e.message).join(", ")
+        });
+      }
+      res.status(400).json({ error: "Login failed" });
     }
   });
 
@@ -137,15 +237,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate user data with zod
       const userSchema = z.object({
         email: z.string().email("Invalid email address"),
+        password: z.string().min(8, "Password must be at least 8 characters"),
         firstName: z.string().min(1, "First name is required"),
         lastName: z.string().min(1, "Last name is required"),
       });
       
       const userData = userSchema.parse({
         email: body.email,
+        password: body.password,
         firstName: body.firstName,
         lastName: body.lastName,
       });
+      
+      // Normalize email to lowercase to prevent case sensitivity issues
+      userData.email = userData.email.toLowerCase();
       
       // Note: Email uniqueness will be enforced by database constraints
       
@@ -165,9 +270,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       try {
+        // Hash password before storing
+        const hashedPassword = await bcrypt.hash(userData.password, 12);
+        
         // Create user first
         const user = await storage.upsertUser({
           ...userData,
+          password: hashedPassword,
           userType: "restaurant" as const,
         });
         
@@ -186,19 +295,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ownerId: user.id,
         });
         
-        // Set session for immediate login
-        req.session.userId = user.id;
-        
-        // Save session and return success
-        req.session.save((err: any) => {
+        // Regenerate session for immediate login to prevent session fixation
+        req.session.regenerate((err: any) => {
           if (err) {
-            console.error("Session save error:", err);
+            console.error("Session regeneration error:", err);
             return res.status(500).json({ error: "Signup successful but login failed" });
           }
-          res.status(201).json({ 
-            user, 
-            restaurant,
-            message: "Restaurant registered successfully" 
+          
+          // Set session
+          req.session.userId = user.id;
+          
+          // Save session and return success
+          req.session.save((saveErr: any) => {
+            if (saveErr) {
+              console.error("Session save error:", saveErr);
+              return res.status(500).json({ error: "Signup successful but login failed" });
+            }
+            res.status(201).json({ 
+              user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                userType: user.userType
+              }, 
+              restaurant,
+              message: "Restaurant registered successfully" 
+            });
           });
         });
       } catch (dbError: any) {
@@ -231,25 +354,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate customer data
       const customerData = customerSignupSchema.parse(body);
       
+      // Normalize email to lowercase to prevent case sensitivity issues
+      customerData.email = customerData.email.toLowerCase();
+      
       try {
+        // Hash password before storing
+        const hashedPassword = await bcrypt.hash(customerData.password, 12);
+        
         // Create customer user
         const user = await storage.upsertUser({
           ...customerData,
+          password: hashedPassword,
           userType: "customer" as const,
         });
         
-        // Set session for immediate login
-        req.session.userId = user.id;
-        
-        // Save session and return success
-        req.session.save((err: any) => {
+        // Regenerate session for immediate login to prevent session fixation
+        req.session.regenerate((err: any) => {
           if (err) {
-            console.error("Session save error:", err);
+            console.error("Session regeneration error:", err);
             return res.status(500).json({ error: "Signup successful but login failed" });
           }
-          res.status(201).json({ 
-            user, 
-            message: "Customer registered successfully" 
+          
+          // Set session
+          req.session.userId = user.id;
+          
+          // Save session and return success
+          req.session.save((saveErr: any) => {
+            if (saveErr) {
+              console.error("Session save error:", saveErr);
+              return res.status(500).json({ error: "Signup successful but login failed" });
+            }
+            res.status(201).json({ 
+              user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                userType: user.userType
+              }, 
+              message: "Customer registered successfully" 
+            });
           });
         });
       } catch (dbError: any) {

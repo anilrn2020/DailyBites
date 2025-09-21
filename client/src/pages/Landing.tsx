@@ -64,11 +64,11 @@ export default function Landing() {
   };
 
   const handleRestaurantLogin = () => {
-    window.location.href = "/api/login";
+    window.location.href = "/login/restaurant";
   };
 
   const handleCustomerLogin = () => {
-    window.location.href = "/api/login/customer";
+    window.location.href = "/login/customer";
   };
 
   return (

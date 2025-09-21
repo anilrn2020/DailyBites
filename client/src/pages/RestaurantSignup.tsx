@@ -20,6 +20,7 @@ const restaurantSignupSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   // Restaurant data
   restaurant: publicInsertRestaurantSchema,
 });
@@ -36,6 +37,7 @@ export default function RestaurantSignup() {
       firstName: "",
       lastName: "",
       email: "",
+      password: "",
       restaurant: {
         name: "",
         description: "",
@@ -163,6 +165,25 @@ export default function RestaurantSignup() {
                         <FormLabel>Email Address</FormLabel>
                         <FormControl>
                           <Input type="email" {...field} data-testid="input-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="password" 
+                            placeholder="Enter a password (min 8 characters)"
+                            {...field} 
+                            data-testid="input-password" 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

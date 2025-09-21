@@ -30,6 +30,7 @@ export const sessions = pgTable(
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
+  password: varchar("password"),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -227,8 +228,20 @@ export const updateUserProfileSchema = z.object({
 // Customer signup schema
 export const customerSignupSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+});
+
+// Login schemas
+export const customerLoginSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export const restaurantLoginSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
 });
 
 // Public restaurant response (hide internal fields)
@@ -270,3 +283,5 @@ export type Favorite = typeof favorites.$inferSelect;
 export type DealAnalytic = typeof dealAnalytics.$inferSelect;
 export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 export type CustomerSignup = z.infer<typeof customerSignupSchema>;
+export type CustomerLogin = z.infer<typeof customerLoginSchema>;
+export type RestaurantLogin = z.infer<typeof restaurantLoginSchema>;

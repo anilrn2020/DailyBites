@@ -11,6 +11,8 @@ import Home from "@/pages/Home";
 import RestaurantDashboard from "@/pages/RestaurantDashboard";
 import RestaurantSignup from "@/pages/RestaurantSignup";
 import CustomerSignup from "@/pages/CustomerSignup";
+import CustomerLogin from "@/pages/CustomerLogin";
+import RestaurantLogin from "@/pages/RestaurantLogin";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -20,6 +22,8 @@ function Router() {
     return (
       <Switch>
         <Route path="/" component={Landing} />
+        <Route path="/login/customer" component={CustomerLogin} />
+        <Route path="/login/restaurant" component={RestaurantLogin} />
         <Route path="/signup/restaurant" component={RestaurantSignup} />
         <Route path="/signup/customer" component={CustomerSignup} />
         <Route component={NotFound} />
