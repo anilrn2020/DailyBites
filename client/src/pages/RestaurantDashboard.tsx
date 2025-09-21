@@ -3,9 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { insertDealSchema, type Deal, type Restaurant, type User } from "@shared/schema";
+import { insertDealSchema, publicUpdateDealSchema, type Deal, type Restaurant, type User } from "@shared/schema";
 import { RestaurantStats } from "@/components/RestaurantStats";
-import { SubscriptionPricing } from "@/components/SubscriptionPricing";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
@@ -82,34 +81,43 @@ const mockActiveDeals = [
 
 export default function RestaurantDashboard() {
   const { toast } = useToast();
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
 
   // Get current user and restaurant data
   const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
   const { data: restaurant } = useQuery<Restaurant>({ queryKey: ["/api/restaurants/my"] });
   const { data: deals = [], isLoading: dealsLoading } = useQuery<Deal[]>({ 
-    queryKey: ["/api/deals", "restaurant"], 
+    queryKey: ["/api/deals/my"], 
     enabled: !!restaurant?.id 
   });
 
   // Deal creation form
   const dealForm = useForm({
-    resolver: zodResolver(insertDealSchema.extend({
-      originalPrice: insertDealSchema.shape.originalPrice.transform(Number),
-      dealPrice: insertDealSchema.shape.dealPrice.transform(Number),
-    })),
+    resolver: zodResolver(insertDealSchema),
     defaultValues: {
       title: "",
       description: "",
-      originalPrice: 0,
-      dealPrice: 0,
+      originalPrice: "0",
+      dealPrice: "0",
       duration: 24, // 24 hours
+    },
+  });
+
+  // Deal edit form
+  const editForm = useForm({
+    resolver: zodResolver(publicUpdateDealSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      originalPrice: "0",
+      dealPrice: "0",
     },
   });
 
   const createDealMutation = useMutation({
     mutationFn: (data: any) => apiRequest("/api/deals", "POST", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deals/my"] });
       dealForm.reset();
       toast({ title: "Deal created successfully!" });
     },
@@ -121,11 +129,24 @@ export default function RestaurantDashboard() {
   const deleteDealMutation = useMutation({
     mutationFn: (dealId: string) => apiRequest(`/api/deals/${dealId}`, "DELETE"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deals/my"] });
       toast({ title: "Deal deleted successfully!" });
     },
     onError: (error: any) => {
       toast({ title: "Failed to delete deal", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const editDealMutation = useMutation({
+    mutationFn: ({ dealId, data }: { dealId: string; data: any }) => 
+      apiRequest(`/api/deals/${dealId}`, "PATCH", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/deals/my"] });
+      setEditingDeal(null);
+      toast({ title: "Deal updated successfully!" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update deal", description: error.message, variant: "destructive" });
     },
   });
 
@@ -142,6 +163,27 @@ export default function RestaurantDashboard() {
     if (window.confirm("Are you sure you want to delete this deal?")) {
       deleteDealMutation.mutate(dealId);
     }
+  };
+
+  const handleEditDeal = (deal: Deal) => {
+    setEditingDeal(deal);
+    editForm.reset({
+      title: deal.title,
+      description: deal.description || "",
+      originalPrice: deal.originalPrice.toString(),
+      dealPrice: deal.dealPrice.toString(),
+    });
+  };
+
+  const handleSaveEdit = (data: any) => {
+    if (editingDeal) {
+      editDealMutation.mutate({ dealId: editingDeal.id, data });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingDeal(null);
+    editForm.reset();
   };
 
   return (
@@ -169,10 +211,6 @@ export default function RestaurantDashboard() {
                 <DropdownMenuItem onClick={() => console.log('Settings clicked')}>
                   <Settings className="h-4 w-4 mr-2" />
                   Restaurant Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => console.log('Billing clicked')}>
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Billing & Subscription
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
@@ -264,44 +302,150 @@ export default function RestaurantDashboard() {
                   return (
                     <Card key={deal.id} data-testid={`card-active-deal-${deal.id}`}>
                       <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-lg mb-2">{deal.title}</h4>
-                            <p className="text-sm text-muted-foreground mb-2">{deal.description}</p>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <DollarSign className="h-4 w-4" />
-                                ${deal.dealPrice} (was ${deal.originalPrice})
+                        {editingDeal?.id === deal.id ? (
+                          // Edit mode
+                          <Form {...editForm}>
+                            <form onSubmit={editForm.handleSubmit(handleSaveEdit)} className="space-y-4">
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <FormField
+                                  control={editForm.control}
+                                  name="title"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Deal Title</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          placeholder="Deal title"
+                                          data-testid={`input-edit-title-${deal.id}`}
+                                          {...field}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={editForm.control}
+                                  name="description"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Description</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          placeholder="Description"
+                                          data-testid={`input-edit-description-${deal.id}`}
+                                          {...field}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-4 w-4" />
-                                {timeRemaining} left
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <FormField
+                                  control={editForm.control}
+                                  name="originalPrice"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Original Price ($)</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          placeholder="18.99"
+                                          data-testid={`input-edit-original-price-${deal.id}`}
+                                          {...field}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={editForm.control}
+                                  name="dealPrice"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Deal Price ($)</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          placeholder="12.99"
+                                          data-testid={`input-edit-deal-price-${deal.id}`}
+                                          {...field}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
                               </div>
-                              <Badge variant={deal.isActive && timeLeft > 0 ? "default" : "secondary"}>
-                                {deal.isActive && timeLeft > 0 ? "Active" : "Inactive"}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  type="submit" 
+                                  size="sm"
+                                  disabled={editDealMutation.isPending}
+                                  data-testid={`button-save-edit-${deal.id}`}
+                                >
+                                  {editDealMutation.isPending ? "Saving..." : "Save"}
+                                </Button>
+                                <Button 
+                                  type="button"
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={handleCancelEdit}
+                                  data-testid={`button-cancel-edit-${deal.id}`}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </form>
+                          </Form>
+                        ) : (
+                          // View mode
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-lg mb-2">{deal.title}</h4>
+                              <p className="text-sm text-muted-foreground mb-2">{deal.description}</p>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <DollarSign className="h-4 w-4" />
+                                  ${deal.dealPrice} (was ${deal.originalPrice})
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  {timeRemaining} left
+                                </div>
+                                <Badge variant={deal.isActive && timeLeft > 0 ? "default" : "secondary"}>
+                                  {deal.isActive && timeLeft > 0 ? "Active" : "Inactive"}
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleEditDeal(deal)}
+                                data-testid={`button-edit-deal-${deal.id}`}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleDeleteDeal(deal.id)}
+                                disabled={deleteDealMutation.isPending}
+                                data-testid={`button-delete-deal-${deal.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => console.log('Edit deal:', deal.id)}
-                            >
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleDeleteDeal(deal.id)}
-                              disabled={deleteDealMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
+                        )}
                       </CardContent>
                     </Card>
                   );
@@ -376,7 +520,7 @@ export default function RestaurantDashboard() {
                                 placeholder="18.99"
                                 data-testid="input-original-price"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => field.onChange(e.target.value)}
                               />
                             </FormControl>
                             <FormMessage />
@@ -397,7 +541,7 @@ export default function RestaurantDashboard() {
                                 placeholder="12.99"
                                 data-testid="input-deal-price"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => field.onChange(e.target.value)}
                               />
                             </FormControl>
                             <FormMessage />

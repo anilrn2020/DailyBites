@@ -166,24 +166,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Restaurant not found" });
       }
 
-      // Check deal limits based on subscription
-      const dealsUsed = restaurant.dealsUsedThisMonth || 0;
-      const dealLimit = restaurant.dealLimit || 5;
-      if (dealsUsed >= dealLimit) {
-        return res.status(403).json({ 
-          error: "Deal limit reached. Upgrade your subscription to post more deals." 
-        });
-      }
-
       const dealData = insertDealSchema.parse(req.body);
+      
       const deal = await storage.createDeal({
         ...dealData,
         restaurantId: restaurant.id,
-      });
-
-      // Increment deals used counter
-      await storage.updateRestaurant(restaurant.id, {
-        dealsUsedThisMonth: (restaurant.dealsUsedThisMonth || 0) + 1,
       });
       
       res.status(201).json(deal);
