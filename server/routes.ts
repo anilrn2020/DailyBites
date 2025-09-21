@@ -93,6 +93,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer login route
+  app.get("/api/login/customer", async (req: any, res: any) => {
+    try {
+      // For development, simulate customer authentication by creating a test customer session
+      const testCustomerId = "test-customer-1";
+      
+      // Create/upsert customer user
+      await storage.upsertUser({
+        id: testCustomerId,
+        email: "customer@test.com",
+        firstName: "Test",
+        lastName: "Customer",
+        userType: "customer",
+      });
+      
+      // Set session
+      req.session.userId = testCustomerId;
+      
+      // Save session explicitly before redirect
+      req.session.save((err: any) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "Login failed" });
+        }
+        res.redirect("/");
+      });
+    } catch (error) {
+      console.error("Customer login error:", error);
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
   app.get("/api/logout", (req: any, res: any) => {
     req.session.destroy(() => {
       res.redirect("/");

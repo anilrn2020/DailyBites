@@ -62,8 +62,12 @@ export default function Landing() {
     );
   };
 
-  const handleLogin = () => {
+  const handleRestaurantLogin = () => {
     window.location.href = "/api/login";
+  };
+
+  const handleCustomerLogin = () => {
+    window.location.href = "/api/login/customer";
   };
 
   return (
@@ -77,7 +81,10 @@ export default function Landing() {
           
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Button onClick={handleLogin} data-testid="button-login">
+            <Button variant="outline" onClick={handleCustomerLogin} data-testid="button-customer-login">
+              Customer Login
+            </Button>
+            <Button onClick={handleRestaurantLogin} data-testid="button-restaurant-login">
               Restaurant Login
             </Button>
           </div>
@@ -124,7 +131,7 @@ export default function Landing() {
         />
         
         <div className="text-center mt-8">
-          <Button size="lg" onClick={handleLogin} data-testid="button-view-all-deals">
+          <Button size="lg" onClick={handleCustomerLogin} data-testid="button-view-all-deals">
             View All Deals
           </Button>
         </div>
