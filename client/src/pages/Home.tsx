@@ -83,12 +83,9 @@ const formatTimeRemaining = (endTime: Date): string => {
 
 export default function Home() {
   const { user } = useAuth() as { user: User | null; isLoading: boolean; isAuthenticated: boolean };
-  const [location, setLocation] = useState(""); // Will be set to user's city
+  const [zipCode, setZipCode] = useState(""); // For zip code search
   const [viewMode, setViewMode] = useState("grid"); // View mode for deals display
   const [showProfileDialog, setShowProfileDialog] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState("distance");
   const { toast } = useToast();
 
   // Profile form
@@ -106,12 +103,12 @@ export default function Home() {
   });
 
 
-  // Set default location to user's city when user data is available
+  // Set default zip code from user's profile when user data is available
   useEffect(() => {
-    if (user?.city && user?.state && !location) {
-      setLocation(`${user.city}, ${user.state}`);
+    if (user?.zipCode && !zipCode) {
+      setZipCode(user.zipCode);
     }
-  }, [user, location]);
+  }, [user, zipCode]);
 
   // Populate profile form when user data is available
   useEffect(() => {
@@ -128,12 +125,12 @@ export default function Home() {
     }
   }, [user, showProfileDialog, profileForm]);
 
-  // Build query URL with parameters (simplified to just location)
+  // Build query URL with parameters (using zip code)
   const buildDealsQuery = () => {
     const params = new URLSearchParams();
     
-    if (location.trim()) {
-      params.append('location', location);
+    if (zipCode.trim()) {
+      params.append('zipCode', zipCode);
       params.append('radius', '25'); // Default 25 mile radius for broader search
     }
     
@@ -142,25 +139,25 @@ export default function Home() {
     return `/api/deals${params.toString() ? '?' + params.toString() : ''}`;
   };
 
-  // Fetch deals using useQuery
-  const { data: dealsData = [], isLoading: dealsLoading, error: dealsError } = useQuery<Deal[]>({
+  // Fetch deals using useQuery (only when Find Deals is clicked or zipCode exists)
+  const { data: dealsData = [], isLoading: dealsLoading, error: dealsError, refetch } = useQuery<Deal[]>({
     queryKey: [buildDealsQuery()],
-    enabled: true,
+    enabled: false, // Don't auto-run, only when Find Deals is clicked
   });
 
-  // Simplified function to handle deal search
+  // Function to handle Find Deals button click
   const handleFindDeals = () => {
-    if (!location.trim()) {
+    if (!zipCode.trim()) {
       toast({
-        title: "Location required",
-        description: "Please enter a location to find deals near you",
+        title: "ZIP code required",
+        description: "Please enter a ZIP code to find deals near you",
         variant: "destructive",
       });
       return;
     }
     
-    // The query will automatically update with the new location
-    // thanks to the buildDealsQuery dependency
+    // Manually trigger the query
+    refetch();
   };
 
   // Remove restaurants query since we're simplifying to just deals
@@ -252,14 +249,6 @@ export default function Home() {
 
   // Transform deals for display
   const deals = dealsData.map(transformDeal);
-
-  const handleCuisineToggle = (cuisine: string) => {
-    setSelectedCuisines(prev => 
-      prev.includes(cuisine) 
-        ? prev.filter(c => c !== cuisine)
-        : [...prev, cuisine]
-    );
-  };
 
 
   const handleRestaurantFavoriteToggle = (restaurantId: string) => {
@@ -363,18 +352,28 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Search Filters */}
+        {/* ZIP Code Search */}
         <div className="mb-8">
-          <SearchFilters
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            selectedCuisines={selectedCuisines}
-            onCuisineToggle={handleCuisineToggle}
-            location={location}
-            onLocationChange={setLocation}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-          />
+          <div className="flex gap-4 max-w-md mx-auto">
+            <div className="flex-1">
+              <Input
+                type="text"
+                placeholder="Enter location zip code"
+                value={zipCode}
+                onChange={(e) => setZipCode(e.target.value)}
+                className="text-center"
+                data-testid="input-zipcode"
+              />
+            </div>
+            <Button 
+              onClick={handleFindDeals}
+              disabled={dealsLoading}
+              className="bg-orange-600 hover:bg-orange-700"
+              data-testid="button-find-deals"
+            >
+              {dealsLoading ? "Searching..." : "Find Deals"}
+            </Button>
+          </div>
         </div>
 
         {/* Content Tabs */}
@@ -417,7 +416,7 @@ export default function Home() {
                 </div>
                 <h4 className="font-semibold mb-2">No deals found</h4>
                 <p className="text-muted-foreground mb-4">
-                  {location.trim() ? `No deals found in ${location}. Try expanding your search area or removing filters.` : "No active deals at the moment. Check back soon!"}
+                  {zipCode.trim() ? `No deals found in ${zipCode}. Try expanding your search area.` : "Enter a ZIP code above to find deals!"}
                 </p>
               </div>
             ) : (
