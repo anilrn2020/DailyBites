@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DealGrid } from "@/components/DealGrid";
 import { SearchFilters } from "@/components/SearchFilters";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Heart, User, LogOut, Grid3X3, List, Map, DollarSign } from "lucide-react";
+import { Heart, User as UserIcon, LogOut, Grid3X3, List, Map, DollarSign } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +15,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import type { Deal } from "@shared/schema";
+import type { Deal, User } from "@shared/schema";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 
 // Transform deal data from backend to frontend format
@@ -56,28 +57,24 @@ const formatTimeRemaining = (endTime: Date): string => {
 };
 
 export default function Home() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
-  const [location, setLocation] = useState(""); // Start with no location filter to show all deals
-  const [sortBy, setSortBy] = useState("distance");
-  const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
+  const { user } = useAuth() as { user: User | null; isLoading: boolean; isAuthenticated: boolean };
+  const [location, setLocation] = useState(""); // Will be set to user's city
   const { toast } = useToast();
 
-  // Build query URL with parameters
+  // Set default location to user's city when user data is available
+  useEffect(() => {
+    if (user?.city && user?.state && !location) {
+      setLocation(`${user.city}, ${user.state}`);
+    }
+  }, [user, location]);
+
+  // Build query URL with parameters (simplified to just location)
   const buildDealsQuery = () => {
     const params = new URLSearchParams();
     
-    if (searchQuery.trim()) {
-      params.append('q', searchQuery);
-    }
-    
     if (location.trim()) {
       params.append('location', location);
-      params.append('radius', '10'); // Default 10 mile radius
-    }
-    
-    if (selectedCuisines.length > 0) {
-      params.append('cuisineTypes', selectedCuisines.join(','));
+      params.append('radius', '25'); // Default 25 mile radius for broader search
     }
     
     params.append('limit', '50');
@@ -91,33 +88,22 @@ export default function Home() {
     enabled: true,
   });
 
-  // Build restaurants query URL with parameters
-  const buildRestaurantsQuery = () => {
-    const params = new URLSearchParams();
-    
-    if (searchQuery.trim()) {
-      params.append('q', searchQuery);
+  // Simplified function to handle deal search
+  const handleFindDeals = () => {
+    if (!location.trim()) {
+      toast({
+        title: "Location required",
+        description: "Please enter a location to find deals near you",
+        variant: "destructive",
+      });
+      return;
     }
     
-    if (location.trim()) {
-      params.append('location', location);
-      params.append('radius', '10'); // Default 10 mile radius
-    }
-    
-    if (selectedCuisines.length > 0) {
-      params.append('cuisineTypes', selectedCuisines.join(','));
-    }
-    
-    params.append('limit', '50');
-    
-    return `/api/restaurants${params.toString() ? '?' + params.toString() : ''}`;
+    // The query will automatically update with the new location
+    // thanks to the buildDealsQuery dependency
   };
 
-  // Fetch restaurants using useQuery
-  const { data: restaurantsData = [], isLoading: restaurantsLoading, error: restaurantsError } = useQuery<any[]>({
-    queryKey: [buildRestaurantsQuery()],
-    enabled: true,
-  });
+  // Remove restaurants query since we're simplifying to just deals
 
   // Fetch user favorites
   const { data: favoritesData = [], isLoading: favoritesLoading, error: favoritesError } = useQuery<any[]>({
@@ -246,12 +232,12 @@ export default function Home() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid="button-user-menu">
-                  <User className="h-4 w-4" />
+                  <UserIcon className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => console.log('Profile clicked')}>
-                  <User className="h-4 w-4 mr-2" />
+                  <UserIcon className="h-4 w-4 mr-2" />
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => console.log('Favorites clicked')}>
@@ -369,7 +355,7 @@ export default function Home() {
 {restaurantsData.length === 0 && !restaurantsLoading ? (
               <div className="text-center py-12">
                 <div className="h-12 w-12 mx-auto mb-4 text-muted-foreground bg-muted rounded-full flex items-center justify-center">
-                  <User className="h-6 w-6" />
+                  <UserIcon className="h-6 w-6" />
                 </div>
                 <h4 className="font-semibold mb-2">No restaurants found</h4>
                 <p className="text-muted-foreground">
@@ -433,7 +419,7 @@ export default function Home() {
             ) : favoritesData.filter(fav => fav.type === 'restaurant').length > 0 ? (
               <div>
                 <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <User className="h-4 w-4" />
+                  <UserIcon className="h-4 w-4" />
                   Favorite Restaurants ({favoritesData.filter(fav => fav.type === 'restaurant').length})
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -458,7 +444,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <UserIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="font-heading text-xl font-semibold mb-2">
                   No Favorite Restaurants Yet
                 </h3>

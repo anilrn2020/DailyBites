@@ -9,11 +9,27 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { customerSignupSchema, type CustomerSignup } from "@shared/schema";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { ArrowLeft } from "lucide-react";
 
 export default function CustomerSignup() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  // Handler for address autocomplete selection
+  const handleAddressSelect = (address: { 
+    street?: string; 
+    city: string; 
+    state: string; 
+    zipCode?: string; 
+  }) => {
+    // Auto-populate city, state, and zip code fields when address is selected
+    form.setValue("city", address.city);
+    form.setValue("state", address.state);
+    if (address.zipCode) {
+      form.setValue("zipCode", address.zipCode);
+    }
+  };
   
   const form = useForm<CustomerSignup>({
     resolver: zodResolver(customerSignupSchema),
@@ -22,6 +38,10 @@ export default function CustomerSignup() {
       lastName: "",
       email: "",
       password: "",
+      address: "",
+      city: "",
+      state: "",
+      zipCode: "",
     },
   });
 
@@ -159,6 +179,81 @@ export default function CustomerSignup() {
                           placeholder="Enter a password (min 8 characters)" 
                           {...field} 
                           data-testid="input-password"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <AddressAutocomplete
+                          value={field.value}
+                          onChange={field.onChange}
+                          onAddressSelect={handleAddressSelect}
+                          placeholder="Start typing your address..."
+                          data-testid="input-address"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Dallas"
+                            {...field} 
+                            data-testid="input-city"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="TX"
+                            {...field} 
+                            data-testid="input-state"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="zipCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ZIP Code</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="75034"
+                          {...field} 
+                          data-testid="input-zip-code"
                         />
                       </FormControl>
                       <FormMessage />
