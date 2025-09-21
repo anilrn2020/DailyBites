@@ -86,6 +86,9 @@ export default function Home() {
   const [location, setLocation] = useState(""); // Will be set to user's city
   const [viewMode, setViewMode] = useState("grid"); // View mode for deals display
   const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState("distance");
   const { toast } = useToast();
 
   // Profile form
@@ -101,6 +104,7 @@ export default function Home() {
       zipCode: "",
     },
   });
+
 
   // Set default location to user's city when user data is available
   useEffect(() => {
@@ -375,9 +379,8 @@ export default function Home() {
 
         {/* Content Tabs */}
         <Tabs defaultValue="deals" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="deals" data-testid="tab-deals">Deals</TabsTrigger>
-            <TabsTrigger value="restaurants" data-testid="tab-restaurants">Restaurants</TabsTrigger>
             <TabsTrigger value="favorites" data-testid="tab-favorites">Favorites</TabsTrigger>
           </TabsList>
           
@@ -426,56 +429,6 @@ export default function Home() {
             )}
           </TabsContent>
           
-          <TabsContent value="restaurants" className="mt-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-heading text-xl font-semibold">
-                Nearby Restaurants
-              </h3>
-              <Badge variant="outline">
-                {restaurantsLoading ? "Loading..." : `${restaurantsData.length} restaurants found`}
-              </Badge>
-            </div>
-            
-            {restaurantsError && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
-                <p className="text-destructive">
-                  Failed to load restaurants. Please try again later.
-                </p>
-              </div>
-            )}
-            
-{restaurantsData.length === 0 && !restaurantsLoading ? (
-              <div className="text-center py-12">
-                <div className="h-12 w-12 mx-auto mb-4 text-muted-foreground bg-muted rounded-full flex items-center justify-center">
-                  <UserIcon className="h-6 w-6" />
-                </div>
-                <h4 className="font-semibold mb-2">No restaurants found</h4>
-                <p className="text-muted-foreground">
-                  No restaurants available at the moment. Check back soon!
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {restaurantsData.map((restaurant) => (
-                  <RestaurantCard
-                    key={restaurant.id}
-                    id={restaurant.id}
-                    name={restaurant.name}
-                    imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
-                    rating={parseFloat(restaurant.rating) || 4.5}
-                    reviewCount={restaurant.reviewCount || 0}
-                    cuisineTypes={restaurant.cuisineTypes || []}
-                    distance="N/A" // We'll calculate this later with geolocation
-                    estimatedDelivery="25-40 min" // Placeholder
-                    activeDealCount={0} // We'll calculate this later
-                    isFavorite={favoriteRestaurants.has(restaurant.id)}
-                    onFavoriteToggle={handleRestaurantFavoriteToggle}
-                    onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
           
           <TabsContent value="favorites" className="mt-6">
             <div className="flex items-center justify-between mb-6">
@@ -499,53 +452,24 @@ export default function Home() {
               <div className="text-center py-12">
                 <Heart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="font-heading text-xl font-semibold mb-2">
-                  No Favorite Restaurants Yet
+                  No Favorites Yet
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  Save restaurants you love to quickly find them later
+                  Save deals and restaurants you love to quickly find them later
                 </p>
-                <Button variant="outline">
-                  Browse Restaurants to Add Favorites
+                <Button variant="outline" onClick={() => console.log('Browse deals clicked')}>
+                  Browse Deals to Add Favorites
                 </Button>
-              </div>
-            ) : favoritesData.filter(fav => fav.type === 'restaurant').length > 0 ? (
-              <div>
-                <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <UserIcon className="h-4 w-4" />
-                  Favorite Restaurants ({favoritesData.filter(fav => fav.type === 'restaurant').length})
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {restaurantsData.filter(restaurant => favoriteRestaurants.has(restaurant.id)).map((restaurant) => (
-                    <RestaurantCard
-                      key={restaurant.id}
-                      id={restaurant.id}
-                      name={restaurant.name}
-                      imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
-                      rating={parseFloat(restaurant.rating) || 4.5}
-                      reviewCount={restaurant.reviewCount || 0}
-                      cuisineTypes={restaurant.cuisineTypes || []}
-                      distance="N/A"
-                      estimatedDelivery="25-40 min"
-                      activeDealCount={0}
-                      isFavorite={true}
-                      onFavoriteToggle={handleRestaurantFavoriteToggle}
-                      onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
-                    />
-                  ))}
-                </div>
               </div>
             ) : (
               <div className="text-center py-12">
-                <UserIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <Heart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="font-heading text-xl font-semibold mb-2">
-                  No Favorite Restaurants Yet
+                  Favorites Feature Coming Soon
                 </h3>
-                <p className="text-muted-foreground mb-6">
-                  Save restaurants you love to quickly find them later
+                <p className="text-muted-foreground">
+                  We're working on the favorites feature to help you save your preferred deals
                 </p>
-                <Button variant="outline">
-                  Browse Restaurants to Add Favorites
-                </Button>
               </div>
             )}
           </TabsContent>
