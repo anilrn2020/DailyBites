@@ -134,17 +134,7 @@ export default function RestaurantDashboard() {
   };
 
   const handleCreateDeal = (data: any) => {
-    // Check if restaurant has deals remaining
-    const dealLimit = restaurant?.dealLimit || 0;
-    if (restaurant && deals.length >= dealLimit) {
-      toast({ 
-        title: "Deal limit reached", 
-        description: `Your current plan allows ${dealLimit} deals. Upgrade to create more.`,
-        variant: "destructive" 
-      });
-      return;
-    }
-    
+    // For now, skip subscription plan limits
     createDealMutation.mutate(data);
   };
 
@@ -208,10 +198,10 @@ export default function RestaurantDashboard() {
           {restaurant && (
             <div className="flex items-center gap-2 mt-2">
               <Badge variant="outline">
-                {restaurant.subscriptionPlan} Plan
+                Basic Plan
               </Badge>
               <Badge variant="secondary">
-                {deals.length}/{restaurant.dealLimit || 0} deals used
+                {deals.length} deals created
               </Badge>
             </div>
           )}
@@ -224,11 +214,10 @@ export default function RestaurantDashboard() {
 
         {/* Content Tabs */}
         <Tabs defaultValue="deals" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="deals" data-testid="tab-my-deals">My Deals</TabsTrigger>
             <TabsTrigger value="create" data-testid="tab-create-deal">Create Deal</TabsTrigger>
             <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="subscription" data-testid="tab-subscription">Subscription</TabsTrigger>
           </TabsList>
           
           <TabsContent value="deals" className="mt-6">
@@ -330,7 +319,7 @@ export default function RestaurantDashboard() {
                 </p>
                 {restaurant && (
                   <p className="text-sm text-muted-foreground">
-                    You have {(restaurant.dealLimit || 0) - deals.length} deals remaining on your {restaurant.subscriptionPlan} plan.
+                    Create attractive deals to bring in more customers.
                   </p>
                 )}
               </CardHeader>
@@ -456,7 +445,7 @@ export default function RestaurantDashboard() {
                       type="submit" 
                       className="w-full" 
                       data-testid="button-publish-deal"
-                      disabled={createDealMutation.isPending || (restaurant && deals.length >= (restaurant.dealLimit || 0))}
+                      disabled={createDealMutation.isPending}
                     >
                       {createDealMutation.isPending ? "Creating..." : "Publish Deal"}
                     </Button>
@@ -478,12 +467,6 @@ export default function RestaurantDashboard() {
             </div>
           </TabsContent>
           
-          <TabsContent value="subscription" className="mt-6">
-            <SubscriptionPricing 
-              onPlanSelect={(planId) => console.log('Plan selected:', planId)}
-              currentPlan="basic"
-            />
-          </TabsContent>
         </Tabs>
       </main>
     </div>
