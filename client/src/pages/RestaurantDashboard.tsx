@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { insertDealSchema, publicUpdateDealSchema, type Deal, type Restaurant, type User } from "@shared/schema";
+import { insertDealSchema, publicUpdateDealSchema, publicUpdateRestaurantSchema, type Deal, type Restaurant, type User } from "@shared/schema";
 import { RestaurantStats } from "@/components/RestaurantStats";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -33,6 +33,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // todo: remove mock functionality
 const mockStats = {
@@ -82,6 +89,8 @@ const mockActiveDeals = [
 export default function RestaurantDashboard() {
   const { toast } = useToast();
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState("deals");
 
   // Get current user and restaurant data
   const { data: user } = useQuery<User>({ queryKey: ["/api/auth/user"] });
@@ -113,6 +122,35 @@ export default function RestaurantDashboard() {
       dealPrice: "0",
     },
   });
+
+  // Restaurant settings form
+  const restaurantForm = useForm({
+    resolver: zodResolver(publicUpdateRestaurantSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      address: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      phone: "",
+    },
+  });
+
+  // Reset form with restaurant data when dialog opens
+  useEffect(() => {
+    if (showSettings && restaurant) {
+      restaurantForm.reset({
+        name: restaurant.name,
+        description: restaurant.description || "",
+        address: restaurant.address,
+        city: restaurant.city,
+        state: restaurant.state,
+        zipCode: restaurant.zipCode,
+        phone: restaurant.phone || "",
+      });
+    }
+  }, [showSettings, restaurant, restaurantForm]);
 
   const createDealMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/deals", data),
@@ -147,6 +185,18 @@ export default function RestaurantDashboard() {
     },
     onError: (error: any) => {
       toast({ title: "Failed to update deal", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateRestaurantMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("PATCH", "/api/restaurants/my", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/restaurants/my"] });
+      setShowSettings(false);
+      toast({ title: "Restaurant settings updated successfully!" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update restaurant settings", description: error.message, variant: "destructive" });
     },
   });
 
@@ -208,7 +258,7 @@ export default function RestaurantDashboard() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => console.log('Settings clicked')}>
+                <DropdownMenuItem onClick={() => setShowSettings(true)}>
                   <Settings className="h-4 w-4 mr-2" />
                   Restaurant Settings
                 </DropdownMenuItem>
@@ -251,7 +301,7 @@ export default function RestaurantDashboard() {
         </div>
 
         {/* Content Tabs */}
-        <Tabs defaultValue="deals" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="deals" data-testid="tab-my-deals">My Deals</TabsTrigger>
             <TabsTrigger value="create" data-testid="tab-create-deal">Create Deal</TabsTrigger>
@@ -263,7 +313,10 @@ export default function RestaurantDashboard() {
               <h3 className="font-heading text-xl font-semibold">
                 Active Deals
               </h3>
-              <Button data-testid="button-create-new-deal">
+              <Button 
+                onClick={() => setActiveTab("create")}
+                data-testid="button-create-new-deal"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Create New Deal
               </Button>
@@ -281,11 +334,7 @@ export default function RestaurantDashboard() {
                   <p className="text-muted-foreground mb-4">
                     Create your first deal to start attracting customers
                   </p>
-                  <Button onClick={() => {
-                    // Switch to create tab
-                    const createTab = document.querySelector('[data-testid="tab-create-deal"]') as HTMLButtonElement;
-                    createTab?.click();
-                  }}>
+                  <Button onClick={() => setActiveTab("create")}>
                     <Plus className="h-4 w-4 mr-2" />
                     Create Your First Deal
                   </Button>
@@ -613,6 +662,148 @@ export default function RestaurantDashboard() {
           
         </Tabs>
       </main>
+
+      {/* Restaurant Settings Dialog */}
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Restaurant Settings</DialogTitle>
+            <DialogDescription>
+              Update your restaurant information and preferences
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {restaurant && (
+              <Form {...restaurantForm}>
+                <form onSubmit={restaurantForm.handleSubmit((data) => updateRestaurantMutation.mutate(data))} className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <FormField
+                      control={restaurantForm.control}
+                      name="name"
+                      defaultValue={restaurant.name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Restaurant Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-restaurant-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={restaurantForm.control}
+                      name="phone"
+                      defaultValue={restaurant.phone || ""}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone Number</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-restaurant-phone" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <FormField
+                    control={restaurantForm.control}
+                    name="description"
+                    defaultValue={restaurant.description || ""}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea {...field} data-testid="textarea-restaurant-description" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={restaurantForm.control}
+                    name="address"
+                    defaultValue={restaurant.address}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Address</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-restaurant-address" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <FormField
+                      control={restaurantForm.control}
+                      name="city"
+                      defaultValue={restaurant.city}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>City</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-restaurant-city" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={restaurantForm.control}
+                      name="state"
+                      defaultValue={restaurant.state}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>State</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-restaurant-state" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={restaurantForm.control}
+                      name="zipCode"
+                      defaultValue={restaurant.zipCode}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ZIP Code</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-restaurant-zipcode" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={() => setShowSettings(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={updateRestaurantMutation.isPending}
+                      data-testid="button-save-restaurant-settings"
+                    >
+                      {updateRestaurantMutation.isPending ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

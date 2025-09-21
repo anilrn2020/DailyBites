@@ -30,7 +30,8 @@ export default function RestaurantLogin() {
         title: "Login successful",
         description: "Welcome back to your restaurant dashboard!",
       });
-      setLocation("/dashboard");
+      // Redirect to root path which handles user type routing correctly
+      setLocation("/");
     },
     onError: (error: any) => {
       let message = "Please check your credentials and try again.";

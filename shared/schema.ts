@@ -212,7 +212,14 @@ export const publicInsertRestaurantSchema = insertRestaurantSchema.omit({
   reviewCount: true,
 });
 
-export const publicUpdateRestaurantSchema = publicInsertRestaurantSchema.partial();
+export const publicUpdateRestaurantSchema = publicInsertRestaurantSchema.partial().extend({
+  // Ensure required fields can't be set to empty strings when provided
+  name: z.string().min(1, "Restaurant name is required").optional(),
+  address: z.string().min(1, "Address is required").optional(),
+  city: z.string().min(1, "City is required").optional(),
+  state: z.string().min(1, "State is required").optional(),
+  zipCode: z.string().min(1, "ZIP code is required").optional(),
+});
 
 // Public deal update schema (exclude counters and computed fields)
 export const publicUpdateDealSchema = insertDealSchema.partial().omit({

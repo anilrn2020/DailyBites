@@ -88,16 +88,6 @@ export default function Landing() {
             <Button variant="outline" onClick={handleRestaurantLogin} data-testid="button-restaurant-login">
               Restaurant Login
             </Button>
-            <Link href="/signup/customer">
-              <Button variant="outline" data-testid="button-customer-signup">
-                Customer Sign Up
-              </Button>
-            </Link>
-            <Link href="/signup/restaurant">
-              <Button data-testid="button-restaurant-signup">
-                Restaurant Sign Up
-              </Button>
-            </Link>
           </div>
         </div>
       </header>
