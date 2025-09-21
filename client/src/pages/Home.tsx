@@ -173,11 +173,8 @@ export default function Home() {
     },
   });
 
-  // Transform deals for display with favorite status
-  const deals = dealsData.map(deal => ({
-    ...transformDeal(deal),
-    isFavorite: favoriteDeals.has(deal.id),
-  }));
+  // Transform deals for display
+  const deals = dealsData.map(transformDeal);
 
   const handleCuisineToggle = (cuisine: string) => {
     setSelectedCuisines(prev => 
@@ -187,13 +184,6 @@ export default function Home() {
     );
   };
 
-  const handleDealFavoriteToggle = (dealId: string) => {
-    if (favoriteDeals.has(dealId)) {
-      removeFavoriteMutation.mutate({ type: 'deal', id: dealId });
-    } else {
-      addFavoriteMutation.mutate({ type: 'deal', dealId });
-    }
-  };
 
   const handleRestaurantFavoriteToggle = (restaurantId: string) => {
     if (favoriteRestaurants.has(restaurantId)) {
@@ -350,7 +340,6 @@ export default function Home() {
               <DealGrid 
                 deals={deals}
                 loading={dealsLoading}
-                onFavoriteToggle={handleDealFavoriteToggle}
                 onDealClick={(dealId) => console.log('Deal clicked:', dealId)}
               />
             )}
@@ -429,61 +418,53 @@ export default function Home() {
               <div className="text-center py-12">
                 <Heart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="font-heading text-xl font-semibold mb-2">
-                  No Favorites Yet
+                  No Favorite Restaurants Yet
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  Save deals and restaurants you love to quickly find them later
+                  Save restaurants you love to quickly find them later
                 </p>
                 <Button variant="outline">
-                  Browse Deals to Add Favorites
+                  Browse Restaurants to Add Favorites
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-8">
-                {/* Favorite Deals */}
-                {favoritesData.filter(fav => fav.type === 'deal').length > 0 && (
-                  <div>
-                    <h4 className="font-semibold mb-4 flex items-center gap-2">
-                      <DollarSign className="h-4 w-4" />
-                      Favorite Deals ({favoritesData.filter(fav => fav.type === 'deal').length})
-                    </h4>
-                    <DealGrid
-                      deals={deals.filter(deal => favoriteDeals.has(deal.id))}
-                      loading={false}
-                      onFavoriteToggle={handleDealFavoriteToggle}
-                      onDealClick={(dealId) => console.log('Deal clicked:', dealId)}
+            ) : favoritesData.filter(fav => fav.type === 'restaurant').length > 0 ? (
+              <div>
+                <h4 className="font-semibold mb-4 flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Favorite Restaurants ({favoritesData.filter(fav => fav.type === 'restaurant').length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {restaurantsData.filter(restaurant => favoriteRestaurants.has(restaurant.id)).map((restaurant) => (
+                    <RestaurantCard
+                      key={restaurant.id}
+                      id={restaurant.id}
+                      name={restaurant.name}
+                      imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
+                      rating={parseFloat(restaurant.rating) || 4.5}
+                      reviewCount={restaurant.reviewCount || 0}
+                      cuisineTypes={restaurant.cuisineTypes || []}
+                      distance="N/A"
+                      estimatedDelivery="25-40 min"
+                      activeDealCount={0}
+                      isFavorite={true}
+                      onFavoriteToggle={handleRestaurantFavoriteToggle}
+                      onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
                     />
-                  </div>
-                )}
-                
-                {/* Favorite Restaurants */}
-                {favoritesData.filter(fav => fav.type === 'restaurant').length > 0 && (
-                  <div>
-                    <h4 className="font-semibold mb-4 flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Favorite Restaurants ({favoritesData.filter(fav => fav.type === 'restaurant').length})
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {restaurantsData.filter(restaurant => favoriteRestaurants.has(restaurant.id)).map((restaurant) => (
-                        <RestaurantCard
-                          key={restaurant.id}
-                          id={restaurant.id}
-                          name={restaurant.name}
-                          imageUrl={restaurant.imageUrl || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=300&fit=crop"}
-                          rating={parseFloat(restaurant.rating) || 4.5}
-                          reviewCount={restaurant.reviewCount || 0}
-                          cuisineTypes={restaurant.cuisineTypes || []}
-                          distance="N/A"
-                          estimatedDelivery="25-40 min"
-                          activeDealCount={0}
-                          isFavorite={true}
-                          onFavoriteToggle={handleRestaurantFavoriteToggle}
-                          onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="font-heading text-xl font-semibold mb-2">
+                  No Favorite Restaurants Yet
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Save restaurants you love to quickly find them later
+                </p>
+                <Button variant="outline">
+                  Browse Restaurants to Add Favorites
+                </Button>
               </div>
             )}
           </TabsContent>

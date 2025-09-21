@@ -1,8 +1,6 @@
-import { Clock, MapPin, Heart, Star } from "lucide-react";
+import { Clock, MapPin, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useState } from "react";
 
 interface DealCardProps {
   id: string;
@@ -15,8 +13,6 @@ interface DealCardProps {
   distance: string;
   rating: number;
   cuisineType: string;
-  isFavorite?: boolean;
-  onFavoriteToggle?: (id: string) => void;
   onDealClick?: (id: string) => void;
 }
 
@@ -31,20 +27,10 @@ export function DealCard({
   distance,
   rating,
   cuisineType,
-  isFavorite = false,
-  onFavoriteToggle,
   onDealClick,
 }: DealCardProps) {
-  const [favorite, setFavorite] = useState(isFavorite);
   const savings = originalPrice - dealPrice;
   const savingsPercent = Math.round((savings / originalPrice) * 100);
-
-  const handleFavoriteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFavorite(!favorite);
-    onFavoriteToggle?.(id);
-    console.log(`Favorite toggled for deal ${id}: ${!favorite}`);
-  };
 
   const handleCardClick = () => {
     onDealClick?.(id);
@@ -67,17 +53,6 @@ export function DealCard({
           <Badge variant="destructive" className="bg-primary text-primary-foreground">
             {savingsPercent}% OFF
           </Badge>
-        </div>
-        <div className="absolute top-2 right-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="bg-background/80 backdrop-blur-sm"
-            onClick={handleFavoriteClick}
-            data-testid={`button-favorite-${id}`}
-          >
-            <Heart className={`h-4 w-4 ${favorite ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`} />
-          </Button>
         </div>
         <div className="absolute bottom-2 left-2">
           <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm">
