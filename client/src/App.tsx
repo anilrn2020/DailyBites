@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import Home from "@/pages/Home";
 import RestaurantDashboard from "@/pages/RestaurantDashboard";
+import RestaurantSignup from "@/pages/RestaurantSignup";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -18,6 +19,7 @@ function Router() {
     return (
       <Switch>
         <Route path="/" component={Landing} />
+        <Route path="/signup/restaurant" component={RestaurantSignup} />
         <Route component={NotFound} />
       </Switch>
     );

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { Link } from "wouter";
 import { MapPin, Phone, Mail, Clock } from "lucide-react";
 
 // todo: remove mock functionality  
@@ -79,14 +80,19 @@ export default function Landing() {
             <h1 className="font-heading text-2xl font-bold text-primary">Today's Special</h1>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <ThemeToggle />
             <Button variant="outline" onClick={handleCustomerLogin} data-testid="button-customer-login">
               Customer Login
             </Button>
-            <Button onClick={handleRestaurantLogin} data-testid="button-restaurant-login">
+            <Button variant="outline" onClick={handleRestaurantLogin} data-testid="button-restaurant-login">
               Restaurant Login
             </Button>
+            <Link href="/signup/restaurant">
+              <Button data-testid="button-restaurant-signup">
+                Restaurant Sign Up
+              </Button>
+            </Link>
           </div>
         </div>
       </header>

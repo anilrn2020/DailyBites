@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { z } from "zod";
 import {
   insertRestaurantSchema,
   insertDealSchema,
@@ -122,6 +123,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Customer login error:", error);
       res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  // Restaurant signup route
+  app.post("/api/signup/restaurant", async (req: any, res: any) => {
+    try {
+      const body = req.body;
+      
+      // Validate user data with zod
+      const userSchema = z.object({
+        email: z.string().email("Invalid email address"),
+        firstName: z.string().min(1, "First name is required"),
+        lastName: z.string().min(1, "Last name is required"),
+      });
+      
+      const userData = userSchema.parse({
+        email: body.email,
+        firstName: body.firstName,
+        lastName: body.lastName,
+      });
+      
+      // Note: Email uniqueness will be enforced by database constraints
+      
+      // Validate restaurant data
+      const restaurantData = publicInsertRestaurantSchema.parse(body.restaurant);
+      
+      // Clean up empty strings for optional fields
+      const cleanRestaurantData = {
+        ...restaurantData,
+        description: restaurantData.description || null,
+        phone: restaurantData.phone || null,
+        email: restaurantData.email || null,
+        website: restaurantData.website || null,
+        imageUrl: restaurantData.imageUrl || null,
+        latitude: restaurantData.latitude || null,
+        longitude: restaurantData.longitude || null,
+      };
+
+      // Create user first
+      const user = await storage.upsertUser({
+        ...userData,
+        userType: "restaurant" as const,
+      });
+      
+      // Create restaurant
+      const restaurant = await storage.createRestaurant({
+        ...cleanRestaurantData,
+        ownerId: user.id,
+      });
+      
+      // Set session for immediate login
+      req.session.userId = user.id;
+      
+      // Save session and return success
+      req.session.save((err: any) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "Signup successful but login failed" });
+        }
+        res.status(201).json({ 
+          user, 
+          restaurant,
+          message: "Restaurant registered successfully" 
+        });
+      });
+    } catch (error) {
+      console.error("Restaurant signup error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: error.errors.map(e => e.message).join(", ")
+        });
+      }
+      res.status(400).json({ error: "Failed to register restaurant" });
     }
   });
 
