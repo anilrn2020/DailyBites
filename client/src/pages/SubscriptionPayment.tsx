@@ -1,5 +1,4 @@
 import { useStripe, Elements, PaymentElement, useElements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,12 +8,7 @@ import { ArrowLeft, Check } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-
-// Make sure to call `loadStripe` outside of a component's render to avoid
-// recreating the `Stripe` object on every render.
-const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-console.log("Using Stripe public key:", stripePublicKey ? "Key found" : "No key found");
-const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
+import { stripePromise, isStripeAvailable } from "@/lib/stripe";
 
 const PLAN_DETAILS = {
   basic: { name: "Basic", price: 29, features: ["Post up to 5 deals per month", "Basic analytics dashboard", "Email customer notifications", "Standard support", "Deal scheduling"] },
@@ -187,7 +181,7 @@ export default function SubscriptionPayment() {
   }
 
   // Check if Stripe is available
-  if (!stripePromise) {
+  if (!isStripeAvailable()) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card className="w-full max-w-md">
@@ -208,6 +202,16 @@ export default function SubscriptionPayment() {
   }
 
   useEffect(() => {
+    // Wait for authentication to complete
+    if (isLoading) {
+      return;
+    }
+
+    // Ensure user is authenticated and is a restaurant owner
+    if (!user || (user as any)?.userType !== 'restaurant') {
+      return;
+    }
+
     // Get plan ID from URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const selectedPlan = urlParams.get('plan');
@@ -243,7 +247,7 @@ export default function SubscriptionPayment() {
         });
         setLocation("/restaurant-dashboard");
       });
-  }, [setLocation, toast]);
+  }, [setLocation, toast, isLoading, user]);
 
   if (!clientSecret || !planId) {
     return (
