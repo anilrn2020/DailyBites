@@ -232,6 +232,19 @@ export default function SubscriptionPayment() {
     apiRequest("POST", "/api/create-subscription", { planId: selectedPlan })
       .then((response: any) => {
         console.log("Subscription response:", response);
+        
+        // Handle free trial case (no payment needed during trial)
+        if (response && response.status === 'trialing') {
+          toast({
+            title: "Free Trial Started!",
+            description: "Your 7-day free trial has begun. No payment required until trial ends.",
+            variant: "default",
+          });
+          setLocation("/restaurant-dashboard");
+          return;
+        }
+        
+        // Handle regular subscription (payment required)
         if (response && response.clientSecret) {
           setClientSecret(response.clientSecret);
         } else {

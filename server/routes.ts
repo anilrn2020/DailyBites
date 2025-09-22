@@ -962,6 +962,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const latestInvoice = subscription.latest_invoice as any;
       const clientSecret = latestInvoice?.payment_intent?.client_secret;
       
+      // For free trials, there's no immediate payment intent
+      if (subscription.status === 'trialing') {
+        return res.json({
+          subscriptionId: subscription.id,
+          clientSecret: null, // No payment needed during trial
+          planId,
+          status: 'trialing'
+        });
+      }
+      
       if (!clientSecret) {
         return res.status(500).json({ error: 'Failed to initialize payment' });
       }
