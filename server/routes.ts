@@ -26,11 +26,13 @@ import {
 import { storage } from "./storage";
 import { parseLocation } from "./geocoding";
 
-// Initialize Stripe - Use testing keys in development
+// Initialize Stripe
 const stripeSecretKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
 let stripe: Stripe | null = null;
 
-if (stripeSecretKey) {
+if (!stripeSecretKey) {
+  console.warn('Missing Stripe secret key - subscription features will be disabled');
+} else {
   stripe = new Stripe(stripeSecretKey);
 }
 
@@ -926,7 +928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserStripeInfo(user.id, { customerId });
       }
       
-      // Create subscription
+      // Create subscription with 1-week free trial
       const subscription = await stripe.subscriptions.create({
         customer: customerId,
         items: [{
@@ -939,6 +941,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           },
         }],
+        trial_period_days: 7, // 1 week free trial
         payment_behavior: 'default_incomplete',
         payment_settings: { save_default_payment_method: 'on_subscription' },
         expand: ['latest_invoice.payment_intent'],

@@ -8,10 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Check } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
 // recreating the `Stripe` object on every render.
-const stripePublicKey = import.meta.env.TESTING_VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLIC_KEY;
+const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
 console.log("Using Stripe public key:", stripePublicKey ? "Key found" : "No key found");
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
@@ -104,7 +105,7 @@ const SubscribeForm = ({ planId }: { planId: string }) => {
                   <span className="text-muted-foreground">/month</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  14-day free trial included
+                  7-day free trial included
                 </p>
               </div>
               
@@ -162,6 +163,28 @@ export default function SubscriptionPayment() {
   const [error, setError] = useState("");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user, isLoading } = useAuth();
+
+  // Check if user is a restaurant owner
+  if (!isLoading && (!user || (user as any)?.userType !== 'restaurant')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Access Denied</CardTitle>
+            <CardDescription>
+              Only restaurant owners can access subscription features.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => setLocation("/")} className="w-full">
+              Go Home
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Check if Stripe is available
   if (!stripePromise) {

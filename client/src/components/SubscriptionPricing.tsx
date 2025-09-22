@@ -99,7 +99,7 @@ export function SubscriptionPricing({ onPlanSelect, currentPlan }: SubscriptionP
           Choose Your Restaurant Plan
         </h2>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Start attracting more customers with daily deals. All plans include a 14-day free trial.
+          Start attracting more customers with daily deals. All plans include a 7-day free trial.
         </p>
       </div>
 
@@ -167,7 +167,7 @@ export function SubscriptionPricing({ onPlanSelect, currentPlan }: SubscriptionP
       
       <div className="text-center mt-8">
         <p className="text-sm text-muted-foreground">
-          All plans include a 14-day free trial. Cancel anytime. No setup fees.
+          All plans include a 7-day free trial. Cancel anytime. No setup fees.
         </p>
       </div>
     </div>

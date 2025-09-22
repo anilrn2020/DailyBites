@@ -27,6 +27,7 @@ function Router() {
         <Route path="/login/restaurant" component={RestaurantLogin} />
         <Route path="/signup/restaurant" component={RestaurantSignup} />
         <Route path="/signup/customer" component={CustomerSignup} />
+        <Route path="/subscription-payment" component={SubscriptionPayment} />
         <Route component={NotFound} />
       </Switch>
     );

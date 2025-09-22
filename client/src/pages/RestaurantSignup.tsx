@@ -13,9 +13,10 @@ import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { publicInsertRestaurantSchema } from "@shared/schema";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
+import { SubscriptionPricing } from "@/components/SubscriptionPricing";
 
-// Combined signup schema for user + restaurant data
+// Combined signup schema for user + restaurant data + subscription
 const restaurantSignupSchema = z.object({
   // User data
   firstName: z.string().min(1, "First name is required"),
@@ -24,6 +25,8 @@ const restaurantSignupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   // Restaurant data
   restaurant: publicInsertRestaurantSchema,
+  // Subscription data
+  subscriptionPlan: z.enum(['basic', 'professional', 'enterprise']),
 });
 
 type RestaurantSignupData = z.infer<typeof restaurantSignupSchema>;
@@ -31,6 +34,8 @@ type RestaurantSignupData = z.infer<typeof restaurantSignupSchema>;
 export default function RestaurantSignup() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [selectedPlan, setSelectedPlan] = useState<string>("");
 
   // Handler for address autocomplete selection
   const handleAddressSelect = (address: { 
@@ -69,22 +74,38 @@ export default function RestaurantSignup() {
         longitude: "",
         imageUrl: "",
       },
+      subscriptionPlan: "basic" as const,
     },
   });
 
   const signupMutation = useMutation({
-    mutationFn: (data: RestaurantSignupData) => apiRequest("POST", "/api/signup/restaurant", data),
-    onSuccess: () => {
+    mutationFn: async (data: RestaurantSignupData) => {
+      // First create the account
+      await apiRequest("POST", "/api/signup/restaurant", data);
+      
+      // Then create the subscription
+      const subscriptionResponse = await apiRequest("POST", "/api/create-subscription", { 
+        planId: data.subscriptionPlan 
+      });
+      
+      return subscriptionResponse;
+    },
+    onSuccess: (subscriptionResponse: any) => {
       // Invalidate auth query to refetch user data
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       
       toast({ 
         title: "Registration successful!", 
-        description: "Welcome to Today's Special. You're now logged in." 
+        description: "Welcome to Today's Special! Your subscription is being set up." 
       });
       
-      // Navigate to dashboard after successful signup
-      setLocation("/dashboard");
+      // Navigate to payment completion if client secret is provided
+      if (subscriptionResponse?.clientSecret) {
+        setLocation(`/subscription-payment?plan=${selectedPlan}&fromRegistration=true`);
+      } else {
+        // Navigate to dashboard if no payment needed
+        setLocation("/dashboard");
+      }
     },
     onError: (error: any) => {
       let message = "Failed to register restaurant. Please try again.";
@@ -114,6 +135,47 @@ export default function RestaurantSignup() {
       });
     },
   });
+
+  // Step navigation helpers
+  const nextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  // Handle plan selection
+  const handlePlanSelect = (planId: string) => {
+    setSelectedPlan(planId);
+    form.setValue("subscriptionPlan", planId as any);
+    nextStep();
+  };
+
+  // Form validation for current step
+  const validateCurrentStep = async () => {
+    if (currentStep === 1) {
+      const fields = ["firstName", "lastName", "email", "password"] as const;
+      const isValid = await form.trigger(fields);
+      return isValid;
+    } else if (currentStep === 2) {
+      const fields = ["restaurant.name", "restaurant.address", "restaurant.city", "restaurant.state"] as const;
+      const isValid = await form.trigger(fields);
+      return isValid;
+    }
+    return true;
+  };
+
+  const handleNext = async () => {
+    const isValid = await validateCurrentStep();
+    if (isValid) {
+      nextStep();
+    }
+  };
 
   const onSubmit = (data: RestaurantSignupData) => {
     signupMutation.mutate(data);
