@@ -358,7 +358,7 @@ export default function Home() {
             <div className="flex-1">
               <Input
                 type="text"
-                placeholder="Enter Zip code"
+                placeholder={zipCode.trim() === "" ? "Enter location zip code" : "Enter Zip code"}
                 value={zipCode}
                 onChange={(e) => setZipCode(e.target.value)}
                 className="text-center"
