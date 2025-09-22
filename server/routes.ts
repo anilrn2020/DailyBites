@@ -31,9 +31,7 @@ const stripeSecretKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STR
 let stripe: Stripe | null = null;
 
 if (stripeSecretKey) {
-  stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2025-08-27.basil",
-  });
+  stripe = new Stripe(stripeSecretKey);
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -990,12 +988,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         status: subscription.status,
         plan: subscription.metadata?.planId || 'basic',
-        currentPeriodEnd: subscription.current_period_end,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end
+        currentPeriodEnd: (subscription as any).current_period_end,
+        cancelAtPeriodEnd: (subscription as any).cancel_at_period_end
       });
     } catch (error: any) {
       console.error('Subscription status error:', error);
       res.status(500).json({ error: 'Failed to get subscription status' });
+    }
+  });
+
+  // Update subscription plan
+  app.post('/api/subscription/update', requireAuth, requireRestaurantOwner, async (req: any, res: any) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: 'Payment processing is currently unavailable' });
+      }
+
+      const { planId } = req.body;
+      
+      // Validate planId with Zod
+      const planSchema = z.object({
+        planId: z.enum(['basic', 'professional', 'enterprise'])
+      });
+      
+      const validation = planSchema.safeParse({ planId });
+      if (!validation.success) {
+        return res.status(400).json({ error: 'Invalid plan selected' });
+      }
+
+      const user = req.user;
+      
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ error: 'No existing subscription found' });
+      }
+
+      const validPlans = {
+        'basic': { name: 'Basic Plan', amount: 2900 },
+        'professional': { name: 'Professional Plan', amount: 5900 },
+        'enterprise': { name: 'Enterprise Plan', amount: 9900 }
+      };
+
+      // For this demo, we'll create a new subscription instead of updating
+      // In production, you'd want to use proper Price IDs and subscription modification
+      
+      // Retrieve current subscription to cancel it
+      const currentSubscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      
+      // Cancel current subscription at period end
+      await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true
+      });
+
+      // Create new subscription with new plan
+      const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+      
+      const newSubscription = await stripe.subscriptions.create({
+        customer: user.stripeCustomerId,
+        items: [{
+          price_data: {
+            currency: 'usd',
+            product: `restaurant-${planId}-plan`,
+            unit_amount: validPlans[planId as keyof typeof validPlans].amount,
+            recurring: {
+              interval: 'month',
+            },
+          },
+        }],
+        metadata: {
+          planId: planId
+        }
+      });
+
+      // Update user with new subscription ID
+      await storage.updateUserStripeInfo(user.id, { 
+        customerId: user.stripeCustomerId, 
+        subscriptionId: newSubscription.id 
+      });
+
+      const updatedSubscription = newSubscription;
+
+      res.json({
+        success: true,
+        subscriptionId: updatedSubscription.id,
+        planId,
+        status: updatedSubscription.status
+      });
+    } catch (error: any) {
+      console.error('Subscription update error:', error);
+      res.status(500).json({ error: 'Failed to update subscription' });
+    }
+  });
+
+  // Cancel subscription
+  app.post('/api/subscription/cancel', requireAuth, requireRestaurantOwner, async (req: any, res: any) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: 'Payment processing is currently unavailable' });
+      }
+
+      const user = req.user;
+      
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ error: 'No subscription found' });
+      }
+
+      // Cancel at period end to let user finish their billing cycle
+      const cancelledSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true
+      });
+
+      res.json({
+        success: true,
+        message: 'Subscription will be cancelled at the end of your billing period',
+        cancelAtPeriodEnd: (cancelledSubscription as any).cancel_at_period_end,
+        currentPeriodEnd: (cancelledSubscription as any).current_period_end
+      });
+    } catch (error: any) {
+      console.error('Subscription cancellation error:', error);
+      res.status(500).json({ error: 'Failed to cancel subscription' });
     }
   });
 

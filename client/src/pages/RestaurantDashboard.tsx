@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { insertDealSchema, publicUpdateDealSchema, publicUpdateRestaurantSchema, type Deal, type Restaurant, type User } from "@shared/schema";
 import { RestaurantStats } from "@/components/RestaurantStats";
+import { SubscriptionPricing } from "@/components/SubscriptionPricing";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,8 @@ import {
   DollarSign,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  CreditCard
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -91,6 +93,7 @@ export default function RestaurantDashboard() {
   const { toast } = useToast();
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSubscription, setShowSubscription] = useState(false);
   const [activeTab, setActiveTab] = useState("deals");
 
   // Get current user and restaurant data
@@ -99,6 +102,17 @@ export default function RestaurantDashboard() {
   const { data: deals = [], isLoading: dealsLoading } = useQuery<Deal[]>({ 
     queryKey: ["/api/deals/my"], 
     enabled: !!restaurant?.id 
+  });
+
+  // Get subscription status
+  const { data: subscriptionStatus } = useQuery<{
+    status: string;
+    plan: string | null;
+    currentPeriodEnd?: number;
+    cancelAtPeriodEnd?: boolean;
+  }>({
+    queryKey: ["/api/subscription/status"],
+    enabled: !!user?.id
   });
 
   // Deal creation form
@@ -278,6 +292,10 @@ export default function RestaurantDashboard() {
                   <Settings className="h-4 w-4 mr-2" />
                   Restaurant Settings
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowSubscription(true)} data-testid="menu-subscription">
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Subscription
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="h-4 w-4 mr-2" />
@@ -302,11 +320,19 @@ export default function RestaurantDashboard() {
           {restaurant && (
             <div className="flex items-center gap-2 mt-2">
               <Badge variant="outline">
-                Basic Plan
+                {subscriptionStatus?.plan ? 
+                  `${subscriptionStatus.plan.charAt(0).toUpperCase() + subscriptionStatus.plan.slice(1)} Plan` : 
+                  'No Plan'
+                }
               </Badge>
               <Badge variant="secondary">
                 {deals.length} deals created
               </Badge>
+              {subscriptionStatus?.status === 'active' && (
+                <Badge variant="default" className="bg-green-600">
+                  Active
+                </Badge>
+              )}
             </div>
           )}
         </div>
@@ -823,6 +849,52 @@ export default function RestaurantDashboard() {
                 </form>
               </Form>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Subscription Dialog */}
+      <Dialog open={showSubscription} onOpenChange={setShowSubscription}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Manage Subscription</DialogTitle>
+            <DialogDescription>
+              Choose or change your subscription plan to access premium features
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {subscriptionStatus?.status === 'active' && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="default" className="bg-green-600">
+                    Active Subscription
+                  </Badge>
+                  <Badge variant="outline">
+                    {subscriptionStatus.plan ? 
+                      `${subscriptionStatus.plan.charAt(0).toUpperCase() + subscriptionStatus.plan.slice(1)} Plan` : 
+                      'Current Plan'
+                    }
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Your subscription is active and all features are available.
+                  {subscriptionStatus.currentPeriodEnd && (
+                    ` Next billing: ${new Date(subscriptionStatus.currentPeriodEnd * 1000).toLocaleDateString()}`
+                  )}
+                </p>
+              </div>
+            )}
+            
+            <SubscriptionPricing 
+              currentPlan={subscriptionStatus?.plan || undefined}
+              onPlanSelect={(planId) => {
+                // Close subscription dialog and navigate to payment
+                setShowSubscription(false);
+                // Navigate to subscription payment with selected plan
+                window.location.href = `/subscription-payment?plan=${planId}`;
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>

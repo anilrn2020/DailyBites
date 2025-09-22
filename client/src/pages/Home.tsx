@@ -86,6 +86,7 @@ export default function Home() {
   const [zipCode, setZipCode] = useState(""); // For zip code search
   const [viewMode, setViewMode] = useState("grid"); // View mode for deals display
   const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [favoriteRestaurants, setFavoriteRestaurants] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   // Profile form
@@ -109,6 +110,7 @@ export default function Home() {
       setZipCode(user.zipCode);
     }
   }, [user, zipCode]);
+
 
   // Populate profile form when user data is available
   useEffect(() => {
@@ -156,8 +158,9 @@ export default function Home() {
       return;
     }
     
-    // Manually trigger the query
+    // Manually trigger both deals and restaurants queries
     refetch();
+    refetchRestaurants();
   };
 
   // Remove restaurants query since we're simplifying to just deals
@@ -169,8 +172,53 @@ export default function Home() {
   });
 
   // Create favorites state for quick lookup
-  const favoriteRestaurants = new Set(favoritesData.filter(fav => fav.type === 'restaurant').map(fav => fav.restaurantId));
   const favoriteDeals = new Set(favoritesData.filter(fav => fav.type === 'deal').map(fav => fav.dealId));
+
+  // Update favorite restaurants state when favorites data changes
+  useEffect(() => {
+    if (favoritesData) {
+      const restaurantFavorites = new Set(
+        favoritesData.filter(fav => fav.type === 'restaurant').map(fav => fav.restaurantId)
+      );
+      setFavoriteRestaurants(restaurantFavorites);
+    }
+  }, [favoritesData]);
+
+  // Fetch restaurants using the same zip code search
+  const buildRestaurantsQuery = () => {
+    const params = new URLSearchParams();
+    if (zipCode.trim()) {
+      params.append('location', zipCode);
+    }
+    return `/api/restaurants${params.toString() ? '?' + params.toString() : ''}`;
+  };
+
+  // Fetch restaurants
+  const { data: restaurants = [], isLoading: restaurantsLoading, error: restaurantsError, refetch: refetchRestaurants } = useQuery<any[]>({
+    queryKey: [buildRestaurantsQuery()],
+    enabled: false, // Don't auto-run, only when Find Deals is clicked
+  });
+
+  // Handle restaurant favorite toggle
+  const handleRestaurantFavoriteToggle = (restaurantId: string) => {
+    if (favoriteRestaurants.has(restaurantId)) {
+      // Remove from favorites
+      removeFavoriteMutation.mutate({ type: 'restaurant', id: restaurantId });
+      setFavoriteRestaurants(prev => {
+        const newFavorites = new Set(prev);
+        newFavorites.delete(restaurantId);
+        return newFavorites;
+      });
+    } else {
+      // Add to favorites
+      addFavoriteMutation.mutate({ type: 'restaurant', restaurantId });
+      setFavoriteRestaurants(prev => {
+        const newFavorites = new Set(prev);
+        newFavorites.add(restaurantId);
+        return newFavorites;
+      });
+    }
+  };
 
   // Add favorite mutation
   const addFavoriteMutation = useMutation({
@@ -250,14 +298,6 @@ export default function Home() {
   // Transform deals for display
   const deals = dealsData.map(transformDeal);
 
-
-  const handleRestaurantFavoriteToggle = (restaurantId: string) => {
-    if (favoriteRestaurants.has(restaurantId)) {
-      removeFavoriteMutation.mutate({ type: 'restaurant', id: restaurantId });
-    } else {
-      addFavoriteMutation.mutate({ type: 'restaurant', restaurantId });
-    }
-  };
 
   const handleLogout = () => {
     window.location.href = "/api/logout";
@@ -378,8 +418,9 @@ export default function Home() {
 
         {/* Content Tabs */}
         <Tabs defaultValue="deals" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="deals" data-testid="tab-deals">Deals</TabsTrigger>
+            <TabsTrigger value="restaurants" data-testid="tab-restaurants">Restaurants</TabsTrigger>
             <TabsTrigger value="favorites" data-testid="tab-favorites">Favorites</TabsTrigger>
           </TabsList>
           
@@ -428,6 +469,56 @@ export default function Home() {
             )}
           </TabsContent>
           
+          <TabsContent value="restaurants" className="mt-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-heading text-xl font-semibold">
+                Restaurants Near You
+              </h3>
+              <Badge variant="outline">
+                {restaurantsLoading ? "Loading..." : `${restaurants.length} restaurants found`}
+              </Badge>
+            </div>
+            
+            {restaurantsError && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+                <p className="text-destructive">
+                  Failed to load restaurants. Please try again later.
+                </p>
+              </div>
+            )}
+            
+            {restaurants.length === 0 && !restaurantsLoading ? (
+              <div className="text-center py-12">
+                <div className="h-12 w-12 mx-auto mb-4 text-muted-foreground bg-muted rounded-full flex items-center justify-center">
+                  <DollarSign className="h-6 w-6" />
+                </div>
+                <h4 className="font-semibold mb-2">No restaurants found</h4>
+                <p className="text-muted-foreground mb-4">
+                  {zipCode.trim() ? `No restaurants found in ${zipCode}. Try expanding your search area.` : "Enter a ZIP code above to find restaurants!"}
+                </p>
+              </div>
+            ) : (
+              <div className={`grid gap-6 ${viewMode === "grid" ? "md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
+                {restaurants.map((restaurant) => (
+                  <RestaurantCard
+                    key={restaurant.id}
+                    id={restaurant.id}
+                    name={restaurant.name}
+                    imageUrl={restaurant.imageUrl || '/placeholder-restaurant.jpg'}
+                    rating={4.5}
+                    reviewCount={128}
+                    cuisineTypes={restaurant.cuisineType ? [restaurant.cuisineType] : ['Restaurant']}
+                    distance="0.5 mi"
+                    estimatedDelivery="25-35 min"
+                    activeDealCount={restaurant.activeDealCount || 0}
+                    isFavorite={favoriteRestaurants.has(restaurant.id)}
+                    onFavoriteToggle={handleRestaurantFavoriteToggle}
+                    onRestaurantClick={(id) => console.log('Restaurant clicked:', id)}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
           
           <TabsContent value="favorites" className="mt-6">
             <div className="flex items-center justify-between mb-6">
