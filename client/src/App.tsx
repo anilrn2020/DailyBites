@@ -13,6 +13,7 @@ import RestaurantSignup from "@/pages/RestaurantSignup";
 import CustomerSignup from "@/pages/CustomerSignup";
 import CustomerLogin from "@/pages/CustomerLogin";
 import RestaurantLogin from "@/pages/RestaurantLogin";
+import SubscriptionPayment from "@/pages/SubscriptionPayment";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -38,6 +39,8 @@ function Router() {
     <Switch>
       <Route path="/" component={isRestaurantOwner ? RestaurantDashboard : Home} />
       <Route path="/dashboard" component={RestaurantDashboard} />
+      <Route path="/restaurant-dashboard" component={RestaurantDashboard} />
+      <Route path="/subscription-payment" component={SubscriptionPayment} />
       <Route component={NotFound} />
     </Switch>
   );

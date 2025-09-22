@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import Stripe from "stripe";
 import {
   insertRestaurantSchema,
   insertDealSchema,
@@ -24,6 +25,16 @@ import {
 } from "@shared/schema";
 import { storage } from "./storage";
 import { parseLocation } from "./geocoding";
+
+// Initialize Stripe - Use testing keys in development
+const stripeSecretKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+let stripe: Stripe | null = null;
+
+if (stripeSecretKey) {
+  stripe = new Stripe(stripeSecretKey, {
+    apiVersion: "2025-08-27.basil",
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to get authenticated user
@@ -261,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cleanRestaurantData = {
         ...restaurantData,
         description: restaurantData.description || null,
-        phone: restaurantData.phone || null,
+        phone: restaurantData.phone || "N/A", // Phone is required, provide default if empty
         email: restaurantData.email || null,
         website: restaurantData.website || null,
         imageUrl: restaurantData.imageUrl || null,
@@ -871,6 +882,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(analytics);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch deal analytics" });
+    }
+  });
+
+  // Stripe subscription routes
+  app.post('/api/create-subscription', requireAuth, requireRestaurantOwner, async (req: any, res: any) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: 'Payment processing is currently unavailable' });
+      }
+
+      const { planId } = req.body;
+      
+      // Validate planId with Zod
+      const planSchema = z.object({
+        planId: z.enum(['basic', 'professional', 'enterprise'])
+      });
+      
+      const validation = planSchema.safeParse({ planId });
+      if (!validation.success) {
+        return res.status(400).json({ error: 'Invalid plan selected' });
+      }
+      
+      const validPlans = {
+        'basic': { name: 'Basic Plan', amount: 2900 },
+        'professional': { name: 'Professional Plan', amount: 5900 },
+        'enterprise': { name: 'Enterprise Plan', amount: 9900 }
+      };
+      
+      const user = req.user;
+      let customerId = user.stripeCustomerId;
+      
+      // Create Stripe customer if doesn't exist
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          metadata: {
+            userId: user.id,
+            userType: 'restaurant'
+          }
+        });
+        
+        customerId = customer.id;
+        await storage.updateUserStripeInfo(user.id, { customerId });
+      }
+      
+      // Create subscription
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{
+          price_data: {
+            currency: 'usd',
+            product: `Restaurant ${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan`,
+            unit_amount: validPlans[planId as keyof typeof validPlans].amount,
+            recurring: {
+              interval: 'month',
+            },
+          },
+        }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: { save_default_payment_method: 'on_subscription' },
+        expand: ['latest_invoice.payment_intent'],
+        metadata: {
+          planId: planId
+        }
+      });
+      
+      // Update user with subscription info
+      await storage.updateUserStripeInfo(user.id, { 
+        customerId, 
+        subscriptionId: subscription.id 
+      });
+      
+      const latestInvoice = subscription.latest_invoice as any;
+      const clientSecret = latestInvoice?.payment_intent?.client_secret;
+      
+      if (!clientSecret) {
+        return res.status(500).json({ error: 'Failed to initialize payment' });
+      }
+
+      res.json({
+        subscriptionId: subscription.id,
+        clientSecret,
+        planId
+      });
+    } catch (error: any) {
+      console.error('Subscription creation error:', error);
+      res.status(500).json({ error: 'Failed to create subscription' });
+    }
+  });
+
+  app.get('/api/subscription/status', requireAuth, requireRestaurantOwner, async (req: any, res: any) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: 'Payment processing is currently unavailable' });
+      }
+
+      const user = req.user;
+      
+      if (!user.stripeSubscriptionId) {
+        return res.json({ status: 'none', plan: null });
+      }
+      
+      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      
+      res.json({
+        status: subscription.status,
+        plan: subscription.metadata?.planId || 'basic',
+        currentPeriodEnd: subscription.current_period_end,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end
+      });
+    } catch (error: any) {
+      console.error('Subscription status error:', error);
+      res.status(500).json({ error: 'Failed to get subscription status' });
     }
   });
 

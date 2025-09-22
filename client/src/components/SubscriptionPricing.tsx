@@ -2,6 +2,7 @@ import { Check, Star, Crown, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useLocation } from "wouter";
 
 interface PricingTier {
   id: string;
@@ -82,9 +83,13 @@ const PRICING_TIERS: PricingTier[] = [
 ];
 
 export function SubscriptionPricing({ onPlanSelect, currentPlan }: SubscriptionPricingProps) {
+  const [, setLocation] = useLocation();
+
   const handlePlanSelect = (planId: string) => {
     onPlanSelect?.(planId);
     console.log(`Plan selected: ${planId}`);
+    // Navigate to subscription payment page with selected plan
+    setLocation(`/subscription-payment?plan=${planId}`);
   };
 
   return (

@@ -55,6 +55,9 @@ export interface IStorage {
   // Analytics operations
   getDealAnalytics(dealId: string, days?: number): Promise<any[]>;
   getRestaurantAnalytics(restaurantId: string): Promise<any>;
+  
+  // Stripe operations
+  updateUserStripeInfo(userId: string, stripeInfo: { customerId?: string; subscriptionId?: string }): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -389,6 +392,31 @@ export class DatabaseStorage implements IStorage {
       .where(eq(deals.restaurantId, restaurantId));
 
     return result;
+  }
+
+  // Stripe operations
+  async updateUserStripeInfo(userId: string, stripeInfo: { customerId?: string; subscriptionId?: string }): Promise<User> {
+    const updateData: any = {};
+    
+    if (stripeInfo.customerId !== undefined) {
+      updateData.stripeCustomerId = stripeInfo.customerId;
+    }
+    
+    if (stripeInfo.subscriptionId !== undefined) {
+      updateData.stripeSubscriptionId = stripeInfo.subscriptionId;
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw new Error("User not found");
+    }
+
+    return updatedUser;
   }
 }
 
