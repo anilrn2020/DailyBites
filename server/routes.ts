@@ -934,7 +934,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items: [{
           price_data: {
             currency: 'usd',
-            product: `Restaurant ${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan`,
+            product_data: {
+              name: `Restaurant ${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan`
+            },
             unit_amount: validPlans[planId as keyof typeof validPlans].amount,
             recurring: {
               interval: 'month',
