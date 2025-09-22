@@ -27,7 +27,7 @@ import { storage } from "./storage";
 import { parseLocation } from "./geocoding";
 
 // Initialize Stripe
-const stripeSecretKey = process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || process.env.TESTING_STRIPE_SECRET_KEY;
 let stripe: Stripe | null = null;
 
 if (!stripeSecretKey) {
