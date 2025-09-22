@@ -928,21 +928,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserStripeInfo(user.id, { customerId });
       }
       
+      // Create product and price first, then subscription
+      const product = await stripe.products.create({
+        name: `Restaurant ${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan`,
+      });
+
+      const price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: validPlans[planId as keyof typeof validPlans].amount,
+        currency: 'usd',
+        recurring: { interval: 'month' },
+      });
+
       // Create subscription with 1-week free trial
       const subscription = await stripe.subscriptions.create({
         customer: customerId,
-        items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Restaurant ${planId.charAt(0).toUpperCase() + planId.slice(1)} Plan`
-            },
-            unit_amount: validPlans[planId as keyof typeof validPlans].amount,
-            recurring: {
-              interval: 'month',
-            },
-          },
-        }],
+        items: [{ price: price.id }],
         trial_period_days: 7, // 1 week free trial
         payment_behavior: 'default_incomplete',
         payment_settings: { save_default_payment_method: 'on_subscription' },
